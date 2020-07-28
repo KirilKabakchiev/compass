@@ -8,7 +8,7 @@ import (
 
 	"github.com/99designs/gqlgen/codegen/config"
 	"github.com/99designs/gqlgen/plugin"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 type GraphqlOperationType string
@@ -37,27 +37,20 @@ func (p *scopesDecoratorPlugin) Name() string {
 
 func (p *scopesDecoratorPlugin) MutateConfig(cfg *config.Config) error {
 	fmt.Printf("[%s] Mutate Configuration\n", p.Name())
-	if err := cfg.Check(); err != nil {
+
+	if err := cfg.LoadSchema(); err != nil {
 		return err
 	}
 
-	schema, _, err := cfg.LoadSchema()
-	if err != nil {
-		return err
-	}
-
-	if schema.Query != nil {
-		for _, f := range schema.Query.Fields {
+	if cfg.Schema.Query != nil {
+		for _, f := range cfg.Schema.Query.Fields {
 			p.ensureDirective(f, Query)
 		}
 	}
-	if schema.Mutation != nil {
-		for _, f := range schema.Mutation.Fields {
+	if cfg.Schema.Mutation != nil {
+		for _, f := range cfg.Schema.Mutation.Fields {
 			p.ensureDirective(f, Mutation)
 		}
-	}
-	if err := cfg.Check(); err != nil {
-		return err
 	}
 
 	schemaFile, err := os.Create(p.schemaFileName)
@@ -66,7 +59,7 @@ func (p *scopesDecoratorPlugin) MutateConfig(cfg *config.Config) error {
 	}
 
 	f := plugins.NewFormatter(schemaFile)
-	f.FormatSchema(schema)
+	f.FormatSchema(cfg.Schema)
 	return schemaFile.Close()
 }
 

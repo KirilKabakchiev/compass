@@ -3,6 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/kyma-incubator/compass/components/director/internal/consumer"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/api"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/application"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/document"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/eventdef"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/fetchrequest"
+	mp_package "github.com/kyma-incubator/compass/components/director/internal/domain/package"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/systemauthrestrictions"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/version"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/webhook"
 	"net/http"
 	"os"
 	"time"
@@ -43,9 +54,10 @@ import (
 	"github.com/kyma-incubator/compass/components/director/pkg/signal"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/99designs/gqlgen/handler"
+	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/gorilla/mux"
 	"github.com/kyma-incubator/compass/components/director/pkg/graphql"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/vrischmann/envconfig"
@@ -86,7 +98,7 @@ func main() {
 
 	configureLogger()
 
-	transact, closeFunc, err := persistence.Configure(log.StandardLogger(), cfg.Database)
+	db, closeFunc, err := persistence.Configure(log.StandardLogger(), cfg.Database)
 	exitOnError(err, "Error while establishing the connection to the database")
 
 	defer func() {
@@ -95,32 +107,6 @@ func main() {
 	}()
 
 	stopCh := signal.SetupChannel()
-	cfgProvider := createAndRunConfigProvider(stopCh, cfg)
-
-	log.Infof("Registering metrics collectors...")
-	metricsCollector := metrics.NewCollector()
-	dbStatsCollector := sqlstats.NewStatsCollector("director", transact)
-	prometheus.MustRegister(metricsCollector, dbStatsCollector)
-
-	pairingAdapters, err := getPairingAdaptersMapping(cfg.PairingAdapterSrc)
-	exitOnError(err, "Error while reading Pairing Adapters Configuration")
-	gqlCfg := graphql.Config{
-		Resolvers: domain.NewRootResolver(
-			transact,
-			cfgProvider,
-			cfg.OneTimeToken,
-			cfg.OAuth20,
-			pairingAdapters,
-			cfg.Features,
-			metricsCollector,
-		),
-		Directives: graphql.DirectiveRoot{
-			HasScopes: scope.NewDirective(cfgProvider).VerifyScopes,
-			Validate:  inputvalidation.NewDirective().Validate,
-		},
-	}
-
-	executableSchema := graphql.NewExecutableSchema(gqlCfg)
 
 	log.Infof("Registering GraphQL endpoint on %s...", cfg.APIEndpoint)
 	authMiddleware := authenticator.New(cfg.JWKSEndpoint, cfg.AllowJWTSigningNone)
@@ -136,28 +122,34 @@ func main() {
 		go periodicExecutor.Run(stopCh)
 	}
 
-	statusMiddleware := statusupdate.New(transact, statusupdate.NewRepository(), log.New())
+	statusMiddleware := statusupdate.New(db, statusupdate.NewRepository(), log.New())
 
 	mainRouter := mux.NewRouter()
-	mainRouter.HandleFunc("/", handler.Playground("Dataloader", cfg.PlaygroundAPIEndpoint))
-
-	presenter := error_presenter.NewPresenter(log.StandardLogger(), uid.NewService())
+	mainRouter.HandleFunc("/", playground.Handler("Dataloader", cfg.PlaygroundAPIEndpoint))
 
 	gqlAPIRouter := mainRouter.PathPrefix(cfg.APIEndpoint).Subrouter()
 	gqlAPIRouter.Use(authMiddleware.Handler())
 	gqlAPIRouter.Use(statusMiddleware.Handler())
-	gqlAPIRouter.HandleFunc("", metricsCollector.GraphQLHandlerWithInstrumentation(handler.GraphQL(executableSchema,
-		handler.ErrorPresenter(presenter.Do),
-		handler.RecoverFunc(panic_handler.RecoverFn))))
+
+	cfgProvider := createAndRunConfigProvider(stopCh, cfg)
+
+	log.Infof("Registering metrics collectors...")
+	metricsCollector := metrics.NewCollector()
+	dbStatsCollector := sqlstats.NewStatsCollector("director", db)
+	prometheus.MustRegister(metricsCollector, dbStatsCollector)
+
+	handler := prepareGraphQLHandler(cfg, db, cfgProvider, metricsCollector)
+
+	gqlAPIRouter.HandleFunc("", metricsCollector.GraphQLHandlerWithInstrumentation(handler))
 
 	log.Infof("Registering Tenant Mapping endpoint on %s...", cfg.TenantMappingEndpoint)
-	tenantMappingHandlerFunc, err := getTenantMappingHandlerFunc(transact, cfg.StaticUsersSrc, cfg.StaticGroupsSrc, cfgProvider)
+	tenantMappingHandlerFunc, err := getTenantMappingHandlerFunc(db, cfg.StaticUsersSrc, cfg.StaticGroupsSrc, cfgProvider)
 	exitOnError(err, "Error while configuring tenant mapping handler")
 
 	mainRouter.HandleFunc(cfg.TenantMappingEndpoint, tenantMappingHandlerFunc)
 
 	log.Infof("Registering Runtime Mapping endpoint on %s...", cfg.RuntimeMappingEndpoint)
-	runtimeMappingHandlerFunc, err := getRuntimeMappingHandlerFunc(transact, cfg.JWKSSyncPeriod, stopCh, cfg.Features.DefaultScenarioEnabled)
+	runtimeMappingHandlerFunc, err := getRuntimeMappingHandlerFunc(db, cfg.JWKSSyncPeriod, stopCh, cfg.Features.DefaultScenarioEnabled)
 	exitOnError(err, "Error while configuring runtime mapping handler")
 
 	mainRouter.HandleFunc(cfg.RuntimeMappingEndpoint, runtimeMappingHandlerFunc)
@@ -166,7 +158,7 @@ func main() {
 	mainRouter.HandleFunc("/readyz", healthz.NewReadinessHandler())
 
 	log.Infof("Registering liveness endpoint...")
-	mainRouter.HandleFunc("/healthz", healthz.NewLivenessHandler(transact, log.StandardLogger()))
+	mainRouter.HandleFunc("/healthz", healthz.NewLivenessHandler(db, log.StandardLogger()))
 
 	examplesServer := http.FileServer(http.Dir("./examples/"))
 	mainRouter.PathPrefix("/examples/").Handler(http.StripPrefix("/examples/", examplesServer))
@@ -229,6 +221,53 @@ func createAndRunConfigProvider(stopCh <-chan struct{}, cfg config) *configprovi
 	return provider
 }
 
+func prepareGraphQLHandler(cfg config, db *persistence.DB, cfgProvider *configprovider.Provider, metricsCollector *metrics.Collector) *handler.Server {
+	pairingAdapters, err := getPairingAdaptersMapping(cfg.PairingAdapterSrc)
+
+	//TODO it already happens in rootresolver
+	authConverter := auth.NewConverter()
+	frConverter := fetchrequest.NewConverter(authConverter)
+	versionConverter := version.NewConverter()
+	docConverter := document.NewConverter(frConverter)
+	webhookConverter := webhook.NewConverter(authConverter)
+	apiConverter := api.NewConverter(frConverter, versionConverter)
+	eventAPIConverter := eventdef.NewConverter(frConverter, versionConverter)
+	packageConverter := mp_package.NewConverter(authConverter, apiConverter, eventAPIConverter, docConverter)
+	appConverter := application.NewConverter(webhookConverter, packageConverter)
+
+	applicationRepo := application.NewRepository(appConverter)
+	runtimeRepo := runtime.NewRepository()
+
+	systemAuthRestrictionsConverter := systemauthrestrictions.NewConverter()
+	systemAuthRestrictionsRepo := systemauthrestrictions.NewRepository(systemAuthRestrictionsConverter)
+
+	exitOnError(err, "Error while reading Pairing Adapters Configuration")
+	gqlCfg := graphql.Config{
+		Resolvers: domain.NewRootResolver(
+			db,
+			cfgProvider,
+			cfg.OneTimeToken,
+			cfg.OAuth20,
+			pairingAdapters,
+			cfg.Features,
+			metricsCollector,
+		),
+		Directives: graphql.DirectiveRoot{
+			HasScopes:   scope.NewDirective(cfgProvider).VerifyScopes,
+			LimitAccess: consumer.NewLimitAccessDirective(db, applicationRepo, runtimeRepo, systemAuthRestrictionsRepo).LimitAccess,
+			Validate:    inputvalidation.NewDirective().Validate,
+		},
+	}
+
+	executableSchema := graphql.NewExecutableSchema(gqlCfg)
+	graphQLHandler := handler.NewDefaultServer(executableSchema)
+	presenter := error_presenter.NewPresenter(log.StandardLogger(), uid.NewService())
+	graphQLHandler.SetErrorPresenter(presenter.Do)
+	graphQLHandler.SetRecoverFunc(panic_handler.RecoverFn)
+
+	return graphQLHandler
+}
+
 func exitOnError(err error, context string) {
 	if err != nil {
 		wrappedError := errors.Wrap(err, context)
@@ -247,8 +286,10 @@ func getTenantMappingHandlerFunc(transact persistence.Transactioner, staticUsers
 	uidSvc := uid.NewService()
 	authConverter := auth.NewConverter()
 	systemAuthConverter := systemauth.NewConverter(authConverter)
+	systemAuthRestrictionsConverter := systemauthrestrictions.NewConverter()
 	systemAuthRepo := systemauth.NewRepository(systemAuthConverter)
-	systemAuthSvc := systemauth.NewService(systemAuthRepo, uidSvc)
+	systemAuthRestrictionsRepo := systemauthrestrictions.NewRepository(systemAuthRestrictionsConverter)
+	systemAuthSvc := systemauth.NewService(systemAuthRepo, systemAuthRestrictionsRepo, uidSvc)
 	staticUsersRepo, err := tenantmapping.NewStaticUserRepository(staticUsersSrc)
 	if err != nil {
 		return nil, errors.Wrap(err, "while creating StaticUser repository instance")
@@ -283,11 +324,14 @@ func getRuntimeMappingHandlerFunc(transact persistence.Transactioner, cachePerio
 	labelUpsertSvc := label.NewLabelUpsertService(labelRepo, labelDefRepo, uidSvc)
 	runtimeRepo := runtime.NewRepository()
 
+	systemAuthRestrictionsConverter := systemauthrestrictions.NewConverter()
+	systemAuthRestrictionsRepo := systemauthrestrictions.NewRepository(systemAuthRestrictionsConverter)
+
 	scenarioAssignmentConv := scenarioassignment.NewConverter()
 	scenarioAssignmentRepo := scenarioassignment.NewRepository(scenarioAssignmentConv)
 	scenarioAssignmentEngine := scenarioassignment.NewEngine(labelUpsertSvc, labelRepo, scenarioAssignmentRepo)
 
-	runtimeSvc := runtime.NewService(runtimeRepo, labelRepo, scenariosSvc, labelUpsertSvc, uidSvc, scenarioAssignmentEngine)
+	runtimeSvc := runtime.NewService(runtimeRepo, labelRepo, systemAuthRestrictionsRepo, scenariosSvc, labelUpsertSvc, uidSvc, scenarioAssignmentEngine)
 
 	tenantConv := tenant.NewConverter()
 	tenantRepo := tenant.NewRepository(tenantConv)

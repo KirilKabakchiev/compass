@@ -220,6 +220,10 @@ func (r *Resolver) RegisterApplicationFromTemplate(ctx context.Context, in graph
 		return nil, err
 	}
 
+	//TODO possible automation
+	// Systems that can manage the template should also be able to manage applications created from this template
+	// list system auth restrictions for this template and insert system auth restrictions for the same system auths with the app id
+
 	err = tx.Commit()
 	if err != nil {
 		return nil, err

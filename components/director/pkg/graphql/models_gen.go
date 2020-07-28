@@ -82,13 +82,12 @@ type ApplicationRegisterInput struct {
 	// **Validation:** max=2000
 	Description *string `json:"description"`
 	// **Validation:** label key is alphanumeric with underscore
-	Labels   *Labels         `json:"labels"`
+	Labels   Labels          `json:"labels"`
 	Webhooks []*WebhookInput `json:"webhooks"`
 	// **Validation:** valid URL, max=256
-	HealthCheckURL      *string                     `json:"healthCheckURL"`
-	Packages            []*PackageCreateInput       `json:"packages"`
-	IntegrationSystemID *string                     `json:"integrationSystemID"`
-	StatusCondition     *ApplicationStatusCondition `json:"statusCondition"`
+	HealthCheckURL  *string                     `json:"healthCheckURL"`
+	Packages        []*PackageCreateInput       `json:"packages"`
+	StatusCondition *ApplicationStatusCondition `json:"statusCondition"`
 }
 
 type ApplicationStatus struct {
@@ -130,16 +129,15 @@ type ApplicationUpdateInput struct {
 	// **Validation:** max=2000
 	Description *string `json:"description"`
 	// **Validation:** valid URL, max=256
-	HealthCheckURL      *string                     `json:"healthCheckURL"`
-	IntegrationSystemID *string                     `json:"integrationSystemID"`
-	StatusCondition     *ApplicationStatusCondition `json:"statusCondition"`
+	HealthCheckURL  *string                     `json:"healthCheckURL"`
+	StatusCondition *ApplicationStatusCondition `json:"statusCondition"`
 }
 
 type Auth struct {
 	Credential                      CredentialData         `json:"credential"`
-	AdditionalHeaders               *HttpHeaders           `json:"additionalHeaders"`
+	AdditionalHeaders               HttpHeaders            `json:"additionalHeaders"`
 	AdditionalHeadersSerialized     *HttpHeadersSerialized `json:"additionalHeadersSerialized"`
-	AdditionalQueryParams           *QueryParams           `json:"additionalQueryParams"`
+	AdditionalQueryParams           QueryParams            `json:"additionalQueryParams"`
 	AdditionalQueryParamsSerialized *QueryParamsSerialized `json:"additionalQueryParamsSerialized"`
 	RequestAuth                     *CredentialRequestAuth `json:"requestAuth"`
 }
@@ -147,10 +145,10 @@ type Auth struct {
 type AuthInput struct {
 	Credential *CredentialDataInput `json:"credential"`
 	// **Validation:** if provided, headers name and value required
-	AdditionalHeaders           *HttpHeaders           `json:"additionalHeaders"`
+	AdditionalHeaders           HttpHeaders            `json:"additionalHeaders"`
 	AdditionalHeadersSerialized *HttpHeadersSerialized `json:"additionalHeadersSerialized"`
 	// **Validation:** if provided, query parameters name and value required
-	AdditionalQueryParams           *QueryParams                `json:"additionalQueryParams"`
+	AdditionalQueryParams           QueryParams                 `json:"additionalQueryParams"`
 	AdditionalQueryParamsSerialized *QueryParamsSerialized      `json:"additionalQueryParamsSerialized"`
 	RequestAuth                     *CredentialRequestAuthInput `json:"requestAuth"`
 }
@@ -189,9 +187,9 @@ type BasicCredentialDataInput struct {
 type CSRFTokenCredentialRequestAuth struct {
 	TokenEndpointURL                string                 `json:"tokenEndpointURL"`
 	Credential                      CredentialData         `json:"credential"`
-	AdditionalHeaders               *HttpHeaders           `json:"additionalHeaders"`
+	AdditionalHeaders               HttpHeaders            `json:"additionalHeaders"`
 	AdditionalHeadersSerialized     *HttpHeadersSerialized `json:"additionalHeadersSerialized"`
-	AdditionalQueryParams           *QueryParams           `json:"additionalQueryParams"`
+	AdditionalQueryParams           QueryParams            `json:"additionalQueryParams"`
 	AdditionalQueryParamsSerialized *QueryParamsSerialized `json:"additionalQueryParamsSerialized"`
 }
 
@@ -200,10 +198,10 @@ type CSRFTokenCredentialRequestAuthInput struct {
 	TokenEndpointURL string               `json:"tokenEndpointURL"`
 	Credential       *CredentialDataInput `json:"credential"`
 	// **Validation:** if provided, headers name and value required
-	AdditionalHeaders           *HttpHeaders           `json:"additionalHeaders"`
+	AdditionalHeaders           HttpHeaders            `json:"additionalHeaders"`
 	AdditionalHeadersSerialized *HttpHeadersSerialized `json:"additionalHeadersSerialized"`
 	// **Validation:** if provided, query parameters name and value required
-	AdditionalQueryParams           *QueryParams           `json:"additionalQueryParams"`
+	AdditionalQueryParams           QueryParams            `json:"additionalQueryParams"`
 	AdditionalQueryParamsSerialized *QueryParamsSerialized `json:"additionalQueryParamsSerialized"`
 }
 
@@ -495,7 +493,7 @@ type RuntimeInput struct {
 	// **Validation:**  max=2000
 	Description *string `json:"description"`
 	// **Validation:** key: required, alphanumeric with underscore
-	Labels          *Labels                 `json:"labels"`
+	Labels          Labels                  `json:"labels"`
 	StatusCondition *RuntimeStatusCondition `json:"statusCondition"`
 }
 
@@ -519,6 +517,42 @@ type RuntimeStatus struct {
 type SystemAuth struct {
 	ID   string `json:"id"`
 	Auth *Auth  `json:"auth"`
+}
+
+type SystemAuthAccess struct {
+	To  *SystemAuthAccessTo  `json:"to"`
+	For *SystemAuthAccessFor `json:"for"`
+}
+
+type SystemAuthAccessFor struct {
+	ApplicationID         *string `json:"applicationID"`
+	ApplicationTemplateID *string `json:"applicationTemplateID"`
+	RuntimeID             *string `json:"runtimeID"`
+	IntegrationSystemID   *string `json:"integrationSystemID"`
+}
+
+type SystemAuthAccessForInput struct {
+	ApplicationID         *string `json:"applicationID"`
+	ApplicationTemplateID *string `json:"applicationTemplateID"`
+	RuntimeID             *string `json:"runtimeID"`
+	IntegrationSystemID   *string `json:"integrationSystemID"`
+}
+
+type SystemAuthAccessInput struct {
+	To  *SystemAuthAccessToInput  `json:"to"`
+	For *SystemAuthAccessForInput `json:"for"`
+}
+
+type SystemAuthAccessTo struct {
+	ApplicationID       *string `json:"applicationID"`
+	RuntimeID           *string `json:"runtimeID"`
+	IntegrationSystemID *string `json:"integrationSystemID"`
+}
+
+type SystemAuthAccessToInput struct {
+	ApplicationID       *string `json:"applicationID"`
+	RuntimeID           *string `json:"runtimeID"`
+	IntegrationSystemID *string `json:"integrationSystemID"`
 }
 
 type TemplateValueInput struct {
@@ -1197,5 +1231,50 @@ func (e *ViewerType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e ViewerType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type OwnerType string
+
+const (
+	OwnerTypeRuntime           OwnerType = "RUNTIME"
+	OwnerTypeApplication       OwnerType = "APPLICATION"
+	OwnerTypeIntegrationSystem OwnerType = "INTEGRATION_SYSTEM"
+	OwnerTypeUser              OwnerType = "USER"
+)
+
+var AllOwnerType = []OwnerType{
+	OwnerTypeRuntime,
+	OwnerTypeApplication,
+	OwnerTypeIntegrationSystem,
+	OwnerTypeUser,
+}
+
+func (e OwnerType) IsValid() bool {
+	switch e {
+	case OwnerTypeRuntime, OwnerTypeApplication, OwnerTypeIntegrationSystem, OwnerTypeUser:
+		return true
+	}
+	return false
+}
+
+func (e OwnerType) String() string {
+	return string(e)
+}
+
+func (e *OwnerType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = OwnerType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ownerType", str)
+	}
+	return nil
+}
+
+func (e OwnerType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }

@@ -3,7 +3,6 @@ package persistence
 import (
 	"database/sql"
 	"fmt"
-
 	"github.com/kyma-incubator/compass/components/director/pkg/resource"
 
 	"github.com/kyma-incubator/compass/components/director/pkg/apperrors"
@@ -29,8 +28,8 @@ func MapSQLError(err error, resourceType resource.Type, format string, args ...i
 	case UniqueViolation:
 		return apperrors.NewNotUniqueError(resourceType)
 	case ForeignKeyViolation:
-		return apperrors.NewInvalidDataError("Object already exist")
+		return apperrors.NewInvalidDataError(pgErr.Error())
 	}
 
-	return apperrors.InternalErrorFrom(err, "SQL Error: %s", fmt.Sprintf(format, args...))
+	return apperrors.InternalErrorFrom(err, "SQL Error: %s: %s", fmt.Sprintf(format, args...), err)
 }

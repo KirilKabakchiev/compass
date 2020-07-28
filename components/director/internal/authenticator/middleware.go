@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/kyma-incubator/compass/components/director/pkg/apperrors"
 
@@ -125,7 +125,7 @@ func (a *Authenticator) getBearerToken(r *http.Request) (string, error) {
 	if reqToken == "" {
 		return "", apperrors.NewUnauthorizedError("invalid bearer token")
 	}
-
+	log.Info("======-grep token" + reqToken)
 	reqToken = strings.TrimPrefix(reqToken, "Bearer ")
 	return reqToken, nil
 }
@@ -134,7 +134,12 @@ func (a *Authenticator) contextWithClaims(ctx context.Context, claims Claims) co
 	ctxWithTenants := tenant.SaveToContext(ctx, claims.Tenant, claims.ExternalTenant)
 	scopesArray := strings.Split(claims.Scopes, " ")
 	ctxWithScopes := scope.SaveToContext(ctxWithTenants, scopesArray)
-	apiConsumer := consumer.Consumer{ConsumerID: claims.ConsumerID, ConsumerType: claims.ConsumerType}
+	apiConsumer := consumer.Consumer{
+		ConsumerID:    claims.ConsumerID,
+		SystemAuthID:  claims.SystemAuthID,
+		ConsumerType:  claims.ConsumerType,
+		ConsumerLevel: claims.ConsumerLevel,
+	}
 	ctxWithConsumerInfo := consumer.SaveToContext(ctxWithScopes, apiConsumer)
 	return ctxWithConsumerInfo
 }

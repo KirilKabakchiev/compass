@@ -85,17 +85,18 @@ func (s service) GenerateOneTimeToken(ctx context.Context, id string, tokenType 
 	}
 
 	if tokenType == model.ApplicationReference {
-		app, err := s.appSvc.Get(ctx, id)
+		//TODO prolly add mapping to templates instead
+		//app, err := s.appSvc.Get(ctx, id)
 
-		if err != nil {
-			return model.OneTimeToken{}, errors.Wrapf(err, "while getting application [id: %s]", id)
-		}
+		//if err != nil {
+		//	return model.OneTimeToken{}, errors.Wrapf(err, "while getting application [id: %s]", id)
+		//}
 
-		if app.IntegrationSystemID != nil {
-			if adapterURL, ok := s.intSystemToAdapterMapping[*app.IntegrationSystemID]; ok {
-				return s.getTokenFromAdapter(ctx, adapterURL, *app)
-			}
-		}
+		//if app.IntegrationSystemID != nil {
+		//	if adapterURL, ok := s.intSystemToAdapterMapping[*app.IntegrationSystemID]; ok {
+		//		return s.getTokenFromAdapter(ctx, adapterURL, *app)
+		//	}
+		//}
 	}
 
 	token, err := s.getOneTimeToken(ctx, sysAuthID, tokenType)
@@ -155,7 +156,7 @@ func (s *service) getTokenFromAdapter(ctx context.Context, adapterURL string, ap
 		return nil
 	}, retry.Attempts(3))
 	if err != nil {
-		return model.OneTimeToken{}, errors.Wrapf(err, "while calling adapter [%s] for application [%s] with integration system [%s]", adapterURL, app.ID, *app.IntegrationSystemID)
+		return model.OneTimeToken{}, errors.Wrapf(err, "while calling adapter [%s] for application [%s]", adapterURL, app.ID)
 	}
 	return model.OneTimeToken{
 		Token: externalToken,

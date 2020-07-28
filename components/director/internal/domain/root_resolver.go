@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"github.com/kyma-incubator/compass/components/director/internal/domain/systemauthrestrictions"
 	"net/http"
 	"time"
 
@@ -44,25 +45,26 @@ import (
 var _ graphql.ResolverRoot = &RootResolver{}
 
 type RootResolver struct {
-	app                 *application.Resolver
-	appTemplate         *apptemplate.Resolver
-	api                 *api.Resolver
-	eventAPI            *eventdef.Resolver
-	eventing            *eventing.Resolver
-	doc                 *document.Resolver
-	runtime             *runtime.Resolver
-	healthCheck         *healthcheck.Resolver
-	webhook             *webhook.Resolver
-	labelDef            *labeldef.Resolver
-	token               *onetimetoken.Resolver
-	systemAuth          *systemauth.Resolver
-	oAuth20             *oauth20.Resolver
-	intSys              *integrationsystem.Resolver
-	viewer              *viewer.Resolver
-	tenant              *tenant.Resolver
-	mpPackage           *mp_package.Resolver
-	packageInstanceAuth *packageinstanceauth.Resolver
-	scenarioAssignment  *scenarioassignment.Resolver
+	app                    *application.Resolver
+	appTemplate            *apptemplate.Resolver
+	api                    *api.Resolver
+	eventAPI               *eventdef.Resolver
+	eventing               *eventing.Resolver
+	doc                    *document.Resolver
+	runtime                *runtime.Resolver
+	healthCheck            *healthcheck.Resolver
+	webhook                *webhook.Resolver
+	labelDef               *labeldef.Resolver
+	token                  *onetimetoken.Resolver
+	systemAuth             *systemauth.Resolver
+	oAuth20                *oauth20.Resolver
+	intSys                 *integrationsystem.Resolver
+	viewer                 *viewer.Resolver
+	tenant                 *tenant.Resolver
+	mpPackage              *mp_package.Resolver
+	packageInstanceAuth    *packageinstanceauth.Resolver
+	scenarioAssignment     *scenarioassignment.Resolver
+	systemAuthRestrictions *systemauthrestrictions.Resolver
 }
 
 func NewRootResolver(
@@ -89,6 +91,7 @@ func NewRootResolver(
 	labelConverter := label.NewConverter()
 	tokenConverter := onetimetoken.NewConverter(oneTimeTokenCfg.LegacyConnectorURL)
 	systemAuthConverter := systemauth.NewConverter(authConverter)
+	systemAuthRestrictionsConverter := systemauthrestrictions.NewConverter()
 	intSysConverter := integrationsystem.NewConverter()
 	tenantConverter := tenant.NewConverter()
 	packageConverter := mp_package.NewConverter(authConverter, apiConverter, eventAPIConverter, docConverter)
@@ -109,6 +112,7 @@ func NewRootResolver(
 	docRepo := document.NewRepository(docConverter)
 	fetchRequestRepo := fetchrequest.NewRepository(frConverter)
 	systemAuthRepo := systemauth.NewRepository(systemAuthConverter)
+	systemAuthRestrictionsRepo := systemauthrestrictions.NewRepository(systemAuthRestrictionsConverter)
 	intSysRepo := integrationsystem.NewRepository(intSysConverter)
 	tenantRepo := tenant.NewRepository(tenantConverter)
 	packageRepo := mp_package.NewRepository(packageConverter)
@@ -120,7 +124,7 @@ func NewRootResolver(
 	uidSvc := uid.NewService()
 	labelUpsertSvc := label.NewLabelUpsertService(labelRepo, labelDefRepo, uidSvc)
 	scenariosSvc := labeldef.NewScenariosService(labelDefRepo, uidSvc, featuresConfig.DefaultScenarioEnabled)
-	appTemplateSvc := apptemplate.NewService(appTemplateRepo, uidSvc)
+	appTemplateSvc := apptemplate.NewService(appTemplateRepo, systemAuthRestrictionsRepo, uidSvc)
 	httpClient := getHttpClient()
 	fetchRequestSvc := fetchrequest.NewService(fetchRequestRepo, httpClient, log.StandardLogger())
 	apiSvc := api.NewService(apiRepo, fetchRequestRepo, uidSvc, fetchRequestSvc)
@@ -129,39 +133,41 @@ func NewRootResolver(
 	docSvc := document.NewService(docRepo, fetchRequestRepo, uidSvc)
 	scenarioAssignmentEngine := scenarioassignment.NewEngine(labelUpsertSvc, labelRepo, scenarioAssignmentRepo)
 	scenarioAssignmentSvc := scenarioassignment.NewService(scenarioAssignmentRepo, scenariosSvc, scenarioAssignmentEngine)
-	runtimeSvc := runtime.NewService(runtimeRepo, labelRepo, scenariosSvc, labelUpsertSvc, uidSvc, scenarioAssignmentEngine)
+	runtimeSvc := runtime.NewService(runtimeRepo, labelRepo, systemAuthRestrictionsRepo, scenariosSvc, labelUpsertSvc, uidSvc, scenarioAssignmentEngine)
 	healthCheckSvc := healthcheck.NewService(healthcheckRepo)
 	labelDefSvc := labeldef.NewService(labelDefRepo, labelRepo, scenarioAssignmentRepo, scenariosSvc, uidSvc)
-	systemAuthSvc := systemauth.NewService(systemAuthRepo, uidSvc)
+	systemAuthSvc := systemauth.NewService(systemAuthRepo, systemAuthRestrictionsRepo, uidSvc)
+	systemAuthRestrictionsSvc := systemauthrestrictions.NewService(uidSvc, systemAuthRepo, systemAuthRestrictionsRepo)
 	tenantSvc := tenant.NewService(tenantRepo, uidSvc)
 	oAuth20Svc := oauth20.NewService(cfgProvider, uidSvc, oAuth20Cfg, oAuth20HTTPClient)
 	intSysSvc := integrationsystem.NewService(intSysRepo, uidSvc)
 	eventingSvc := eventing.NewService(runtimeRepo, labelRepo)
 	packageSvc := mp_package.NewService(packageRepo, apiRepo, eventAPIRepo, docRepo, fetchRequestRepo, uidSvc, fetchRequestSvc)
-	appSvc := application.NewService(cfgProvider, applicationRepo, webhookRepo, runtimeRepo, labelRepo, intSysRepo, labelUpsertSvc, scenariosSvc, packageSvc, uidSvc)
+	appSvc := application.NewService(cfgProvider, applicationRepo, webhookRepo, runtimeRepo, labelRepo, intSysRepo, systemAuthRestrictionsRepo, labelUpsertSvc, scenariosSvc, packageSvc, uidSvc)
 	tokenSvc := onetimetoken.NewTokenService(connectorGCLI, systemAuthSvc, appSvc, appConverter, tenantSvc, httpClient, oneTimeTokenCfg.ConnectorURL, pairingAdaptersMapping)
 	packageInstanceAuthSvc := packageinstanceauth.NewService(packageInstanceAuthRepo, uidSvc)
 
 	return &RootResolver{
-		app:                 application.NewResolver(transact, appSvc, webhookSvc, oAuth20Svc, systemAuthSvc, appConverter, webhookConverter, systemAuthConverter, eventingSvc, packageSvc, packageConverter),
-		appTemplate:         apptemplate.NewResolver(transact, appSvc, appConverter, appTemplateSvc, appTemplateConverter),
-		api:                 api.NewResolver(transact, apiSvc, appSvc, runtimeSvc, packageSvc, apiConverter, frConverter),
-		eventAPI:            eventdef.NewResolver(transact, eventAPISvc, appSvc, packageSvc, eventAPIConverter, frConverter),
-		eventing:            eventing.NewResolver(transact, eventingSvc, appSvc),
-		doc:                 document.NewResolver(transact, docSvc, appSvc, packageSvc, frConverter),
-		runtime:             runtime.NewResolver(transact, runtimeSvc, systemAuthSvc, oAuth20Svc, runtimeConverter, systemAuthConverter, eventingSvc),
-		healthCheck:         healthcheck.NewResolver(healthCheckSvc),
-		webhook:             webhook.NewResolver(transact, webhookSvc, appSvc, webhookConverter),
-		labelDef:            labeldef.NewResolver(transact, labelDefSvc, labelDefConverter),
-		token:               onetimetoken.NewTokenResolver(transact, tokenSvc, tokenConverter),
-		systemAuth:          systemauth.NewResolver(transact, systemAuthSvc, oAuth20Svc, systemAuthConverter),
-		oAuth20:             oauth20.NewResolver(transact, oAuth20Svc, appSvc, runtimeSvc, intSysSvc, systemAuthSvc, systemAuthConverter),
-		intSys:              integrationsystem.NewResolver(transact, intSysSvc, systemAuthSvc, oAuth20Svc, intSysConverter, systemAuthConverter),
-		viewer:              viewer.NewViewerResolver(),
-		tenant:              tenant.NewResolver(transact, tenantSvc, tenantConverter),
-		mpPackage:           mp_package.NewResolver(transact, packageSvc, packageInstanceAuthSvc, apiSvc, eventAPISvc, docSvc, packageConverter, packageInstanceAuthConv, apiConverter, eventAPIConverter, docConverter),
-		packageInstanceAuth: packageinstanceauth.NewResolver(transact, packageInstanceAuthSvc, packageSvc, packageInstanceAuthConv),
-		scenarioAssignment:  scenarioassignment.NewResolver(transact, scenarioAssignmentSvc, assignmentConv),
+		app:                    application.NewResolver(transact, appSvc, webhookSvc, oAuth20Svc, systemAuthSvc, appConverter, webhookConverter, systemAuthConverter, eventingSvc, packageSvc, packageConverter),
+		appTemplate:            apptemplate.NewResolver(transact, appSvc, appConverter, appTemplateSvc, appTemplateConverter),
+		api:                    api.NewResolver(transact, apiSvc, appSvc, runtimeSvc, packageSvc, apiConverter, frConverter),
+		eventAPI:               eventdef.NewResolver(transact, eventAPISvc, appSvc, packageSvc, eventAPIConverter, frConverter),
+		eventing:               eventing.NewResolver(transact, eventingSvc, appSvc),
+		doc:                    document.NewResolver(transact, docSvc, appSvc, packageSvc, frConverter),
+		runtime:                runtime.NewResolver(transact, runtimeSvc, systemAuthSvc, oAuth20Svc, runtimeConverter, systemAuthConverter, eventingSvc),
+		healthCheck:            healthcheck.NewResolver(healthCheckSvc),
+		webhook:                webhook.NewResolver(transact, webhookSvc, appSvc, webhookConverter),
+		labelDef:               labeldef.NewResolver(transact, labelDefSvc, labelDefConverter),
+		token:                  onetimetoken.NewTokenResolver(transact, tokenSvc, tokenConverter),
+		systemAuth:             systemauth.NewResolver(transact, systemAuthSvc, oAuth20Svc, systemAuthConverter),
+		oAuth20:                oauth20.NewResolver(transact, oAuth20Svc, appSvc, runtimeSvc, intSysSvc, systemAuthSvc, systemAuthConverter),
+		intSys:                 integrationsystem.NewResolver(transact, intSysSvc, systemAuthSvc, oAuth20Svc, intSysConverter, systemAuthConverter),
+		viewer:                 viewer.NewViewerResolver(),
+		tenant:                 tenant.NewResolver(transact, tenantSvc, tenantConverter),
+		mpPackage:              mp_package.NewResolver(transact, packageSvc, packageInstanceAuthSvc, apiSvc, eventAPISvc, docSvc, packageConverter, packageInstanceAuthConv, apiConverter, eventAPIConverter, docConverter),
+		packageInstanceAuth:    packageinstanceauth.NewResolver(transact, packageInstanceAuthSvc, packageSvc, packageInstanceAuthConv),
+		scenarioAssignment:     scenarioassignment.NewResolver(transact, scenarioAssignmentSvc, assignmentConv),
+		systemAuthRestrictions: systemauthrestrictions.NewResolver(transact, systemAuthSvc, systemAuthRestrictionsSvc, systemAuthRestrictionsConverter),
 	}
 }
 
@@ -448,6 +454,14 @@ func (r *mutationResolver) CreateAutomaticScenarioAssignment(ctx context.Context
 	return r.scenarioAssignment.CreateAutomaticScenarioAssignment(ctx, in)
 }
 
+func (r *mutationResolver) GrantSystemAccess(ctx context.Context, in graphql.SystemAuthAccessInput) (*graphql.SystemAuthAccess, error) {
+	return r.systemAuthRestrictions.GrantSystemAccess(ctx, in)
+}
+
+func (r *mutationResolver) RevokeSystemAccess(ctx context.Context, in graphql.SystemAuthAccessInput) (*graphql.SystemAuthAccess, error) {
+	return r.systemAuthRestrictions.RevokeSystemAccess(ctx, in)
+}
+
 type applicationResolver struct {
 	*RootResolver
 }
@@ -456,7 +470,7 @@ func (r *applicationResolver) Auths(ctx context.Context, obj *graphql.Applicatio
 	return r.app.Auths(ctx, obj)
 }
 
-func (r *applicationResolver) Labels(ctx context.Context, obj *graphql.Application, key *string) (*graphql.Labels, error) {
+func (r *applicationResolver) Labels(ctx context.Context, obj *graphql.Application, key *string) (graphql.Labels, error) {
 	return r.app.Labels(ctx, obj, key)
 }
 func (r *applicationResolver) Webhooks(ctx context.Context, obj *graphql.Application) ([]*graphql.Webhook, error) {
@@ -476,7 +490,7 @@ type runtimeResolver struct {
 	*RootResolver
 }
 
-func (r *runtimeResolver) Labels(ctx context.Context, obj *graphql.Runtime, key *string) (*graphql.Labels, error) {
+func (r *runtimeResolver) Labels(ctx context.Context, obj *graphql.Runtime, key *string) (graphql.Labels, error) {
 	return r.runtime.Labels(ctx, obj, key)
 }
 

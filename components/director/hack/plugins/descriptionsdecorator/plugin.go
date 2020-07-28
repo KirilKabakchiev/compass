@@ -13,7 +13,7 @@ import (
 	"github.com/kyma-incubator/compass/components/director/hack/plugins"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 type GraphqlOperationType string
@@ -43,17 +43,12 @@ func (p *descriptionsDecoratorPlugin) Name() string {
 func (p *descriptionsDecoratorPlugin) MutateConfig(cfg *config.Config) error {
 	fmt.Printf("[%s] Mutate Configuration\n", p.Name())
 
-	if err := cfg.Check(); err != nil {
+	if err := cfg.LoadSchema(); err != nil {
 		return err
 	}
 
-	schema, _, err := cfg.LoadSchema()
-	if err != nil {
-		return err
-	}
-
-	if schema.Query != nil {
-		for _, f := range schema.Query.Fields {
+	if cfg.Schema.Query != nil {
+		for _, f := range cfg.Schema.Query.Fields {
 			err := p.ensureDescription(f, Query)
 			if err != nil {
 				return err
@@ -61,16 +56,13 @@ func (p *descriptionsDecoratorPlugin) MutateConfig(cfg *config.Config) error {
 		}
 	}
 
-	if schema.Mutation != nil {
-		for _, f := range schema.Mutation.Fields {
+	if cfg.Schema.Mutation != nil {
+		for _, f := range cfg.Schema.Mutation.Fields {
 			err := p.ensureDescription(f, Mutation)
 			if err != nil {
 				return err
 			}
 		}
-	}
-	if err := cfg.Check(); err != nil {
-		return err
 	}
 
 	schemaFile, err := os.Create(p.schemaFileName)
@@ -79,7 +71,7 @@ func (p *descriptionsDecoratorPlugin) MutateConfig(cfg *config.Config) error {
 	}
 
 	f := plugins.NewFormatter(schemaFile)
-	f.FormatSchema(schema)
+	f.FormatSchema(cfg.Schema)
 	return schemaFile.Close()
 }
 

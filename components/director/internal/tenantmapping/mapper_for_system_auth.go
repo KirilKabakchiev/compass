@@ -22,6 +22,7 @@ func NewMapperForSystemAuth(systemAuthSvc systemauth.SystemAuthService, scopesGe
 		systemAuthSvc: systemAuthSvc,
 		scopesGetter:  scopesGetter,
 		tenantRepo:    tenantRepo,
+		logger:        logrus.WithField("component", "tenant-mapping-handler"),
 	}
 }
 
@@ -29,6 +30,7 @@ type mapperForSystemAuth struct {
 	systemAuthSvc systemauth.SystemAuthService
 	scopesGetter  ScopesGetter
 	tenantRepo    TenantRepository
+	logger        Logger
 }
 
 func (m *mapperForSystemAuth) GetObjectContext(ctx context.Context, reqData oathkeeper.ReqData, authID string, authFlow oathkeeper.AuthFlow) (ObjectContext, error) {
@@ -36,6 +38,8 @@ func (m *mapperForSystemAuth) GetObjectContext(ctx context.Context, reqData oath
 	if err != nil {
 		return ObjectContext{}, errors.Wrap(err, "while retrieving system auth from database")
 	}
+
+	m.logger.Infof("Obtained system auth %+v", sysAuth)
 
 	refObjType, err := sysAuth.GetReferenceObjectType()
 	if err != nil {
@@ -58,6 +62,8 @@ func (m *mapperForSystemAuth) GetObjectContext(ctx context.Context, reqData oath
 		return ObjectContext{}, errors.Wrap(err, fmt.Sprintf("while fetching the tenant and scopes for object of type %s", refObjType))
 	}
 
+	m.logger.Infof("Obtained tenant context with tenantID=%s, externalTenantID=%s, scopes=%s", tenantCtx.TenantID, tenantCtx.ExternalTenantID, scopes)
+
 	refObjID, err := sysAuth.GetReferenceObjectID()
 	if err != nil {
 		return ObjectContext{}, errors.Wrap(err, "while getting context object")
@@ -68,7 +74,11 @@ func (m *mapperForSystemAuth) GetObjectContext(ctx context.Context, reqData oath
 		return ObjectContext{}, apperrors.NewInternalError("while mapping reference type to consumer type")
 	}
 
-	return NewObjectContext(tenantCtx, scopes, refObjID, consumerType), nil
+	objectContext := NewObjectContext(tenantCtx, scopes, refObjID, authID, consumerType, consumer.ConsumerLevel(sysAuth.AccessLevel))
+
+	m.logger.Infof("Returning object context %+v", objectContext)
+
+	return objectContext, nil
 }
 
 func (m *mapperForSystemAuth) getTenantAndScopesForIntegrationSystem(ctx context.Context, reqData oathkeeper.ReqData) (TenantContext, string, error) {

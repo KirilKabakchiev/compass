@@ -42,9 +42,6 @@ func (g *Graphqlizer) ApplicationRegisterInputToGQL(in graphql.ApplicationRegist
 				{{- if $i}}, {{- end}} {{- PackageCreateInputToGQL $e }}
 			{{- end }} ],
 		{{- end }}
-		{{- if .IntegrationSystemID }}
-		integrationSystemID: "{{ .IntegrationSystemID }}",
-		{{- end }}
 		{{- if .StatusCondition }}
 		statusCondition: {{ .StatusCondition }}
 		{{- end }}
@@ -61,9 +58,6 @@ func (g *Graphqlizer) ApplicationUpdateInputToGQL(in graphql.ApplicationUpdateIn
 		{{- end }}
 		{{- if .HealthCheckURL }}
 		healthCheckURL: "{{ .HealthCheckURL }}",
-		{{- end }}
-		{{- if .IntegrationSystemID }}
-		integrationSystemID: "{{ .IntegrationSystemID }}",
 		{{- end }}
 		{{- if .StatusCondition }}
 		statusCondition: {{ .StatusCondition }}

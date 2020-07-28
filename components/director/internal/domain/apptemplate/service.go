@@ -3,6 +3,7 @@ package apptemplate
 import (
 	"context"
 	"fmt"
+	"github.com/kyma-incubator/compass/components/director/internal/consumer"
 	"strings"
 
 	"github.com/kyma-incubator/compass/components/director/pkg/apperrors"
@@ -23,21 +24,28 @@ type ApplicationTemplateRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
+//go:generate mockery -name=SystemAuthRestrictionsRepository -output=automock -outpkg=automock -case=underscore
+type SystemAuthRestrictionsRepository interface {
+	Create(ctx context.Context, item model.SystemAuthRestrictions) error
+}
+
 //go:generate mockery -name=UIDService -output=automock -outpkg=automock -case=underscore
 type UIDService interface {
 	Generate() string
 }
 
 type service struct {
-	appTemplateRepo ApplicationTemplateRepository
+	appTemplateRepo         ApplicationTemplateRepository
+	sysAuthRestrictionsRepo SystemAuthRestrictionsRepository
 
 	uidService UIDService
 }
 
-func NewService(appTemplateRepo ApplicationTemplateRepository, uidService UIDService) *service {
+func NewService(appTemplateRepo ApplicationTemplateRepository, sysAuthRestrictionsRepo SystemAuthRestrictionsRepository, uidService UIDService) *service {
 	return &service{
-		appTemplateRepo: appTemplateRepo,
-		uidService:      uidService,
+		appTemplateRepo:         appTemplateRepo,
+		sysAuthRestrictionsRepo: sysAuthRestrictionsRepo,
+		uidService:              uidService,
 	}
 }
 
@@ -48,6 +56,21 @@ func (s *service) Create(ctx context.Context, in model.ApplicationTemplateInput)
 	err := s.appTemplateRepo.Create(ctx, appTemplate)
 	if err != nil {
 		return "", errors.Wrap(err, "while creating Application Template")
+	}
+
+	cons, err := consumer.LoadFromContext(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "while getting consumer from context")
+	}
+
+	if cons.ConsumerType != consumer.User {
+		if err := s.sysAuthRestrictionsRepo.Create(ctx, model.SystemAuthRestrictions{
+			ID:            s.uidService.Generate(),
+			SystemAuthID:  cons.SystemAuthID,
+			AppTemplateID: &id,
+		}); err != nil {
+			return "", errors.Wrapf(err, "while creating System Auth restrictions for application template")
+		}
 	}
 
 	return id, nil

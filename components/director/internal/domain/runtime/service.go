@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"github.com/kyma-incubator/compass/components/director/internal/consumer"
 	"strings"
 	"time"
 
@@ -34,6 +35,11 @@ type LabelRepository interface {
 	DeleteAll(ctx context.Context, tenant string, objectType model.LabelableObject, objectID string) error
 }
 
+//go:generate mockery -name=SystemAuthRestrictionsRepository -output=automock -outpkg=automock -case=underscore
+type SystemAuthRestrictionsRepository interface {
+	Create(ctx context.Context, item model.SystemAuthRestrictions) error
+}
+
 //go:generate mockery -name=LabelUpsertService -output=automock -outpkg=automock -case=underscore
 type LabelUpsertService interface {
 	UpsertMultipleLabels(ctx context.Context, tenant string, objectType model.LabelableObject, objectID string, labels map[string]interface{}) error
@@ -59,8 +65,9 @@ type UIDService interface {
 }
 
 type service struct {
-	repo      RuntimeRepository
-	labelRepo LabelRepository
+	repo                    RuntimeRepository
+	labelRepo               LabelRepository
+	sysAuthRestrictionsRepo SystemAuthRestrictionsRepository
 
 	labelUpsertService       LabelUpsertService
 	uidService               UIDService
@@ -70,6 +77,7 @@ type service struct {
 
 func NewService(repo RuntimeRepository,
 	labelRepo LabelRepository,
+	sysAuthRestrictionsRepo SystemAuthRestrictionsRepository,
 	scenariosService ScenariosService,
 	labelUpsertService LabelUpsertService,
 	uidService UIDService,
@@ -77,10 +85,12 @@ func NewService(repo RuntimeRepository,
 	return &service{
 		repo:                     repo,
 		labelRepo:                labelRepo,
-		scenariosService:         scenariosService,
+		sysAuthRestrictionsRepo:  sysAuthRestrictionsRepo,
 		labelUpsertService:       labelUpsertService,
 		uidService:               uidService,
-		scenarioAssignmentEngine: scenarioAssignmentEngine}
+		scenariosService:         scenariosService,
+		scenarioAssignmentEngine: scenarioAssignmentEngine,
+	}
 }
 
 func (s *service) List(ctx context.Context, filter []*labelfilter.LabelFilter, pageSize int, cursor string) (*model.RuntimePage, error) {
@@ -176,6 +186,21 @@ func (s *service) Create(ctx context.Context, in model.RuntimeInput) (string, er
 	err = s.labelUpsertService.UpsertMultipleLabels(ctx, rtmTenant, model.RuntimeLabelableObject, id, in.Labels)
 	if err != nil {
 		return id, errors.Wrapf(err, "while creating multiple labels for Runtime")
+	}
+
+	cons, err := consumer.LoadFromContext(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "while getting consumer from context")
+	}
+
+	if cons.ConsumerType != consumer.User {
+		if err := s.sysAuthRestrictionsRepo.Create(ctx, model.SystemAuthRestrictions{
+			ID:           s.uidService.Generate(),
+			SystemAuthID: cons.SystemAuthID,
+			RuntimeID:    &id,
+		}); err != nil {
+			return "", errors.Wrapf(err, "while creating System Auth restrictions for application")
+		}
 	}
 
 	return id, nil

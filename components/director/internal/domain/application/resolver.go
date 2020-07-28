@@ -453,7 +453,7 @@ func (r *Resolver) Webhooks(ctx context.Context, obj *graphql.Application) ([]*g
 	return r.webhookConverter.MultipleToGraphQL(webhooks)
 }
 
-func (r *Resolver) Labels(ctx context.Context, obj *graphql.Application, key *string) (*graphql.Labels, error) {
+func (r *Resolver) Labels(ctx context.Context, obj *graphql.Application, key *string) (graphql.Labels, error) {
 	if obj == nil {
 		return nil, apperrors.NewInternalError("Application cannot be empty")
 	}
@@ -488,7 +488,7 @@ func (r *Resolver) Labels(ctx context.Context, obj *graphql.Application, key *st
 
 	var gqlLabels graphql.Labels = resultLabels
 
-	return &gqlLabels, nil
+	return gqlLabels, nil
 }
 
 func (r *Resolver) Auths(ctx context.Context, obj *graphql.Application) ([]*graphql.SystemAuth, error) {

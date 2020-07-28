@@ -90,15 +90,17 @@ fi
 
 echo -e "${GREEN}Starting application${NC}"
 
-APP_DB_USER=${DB_USER} \
-APP_DB_PASSWORD=${DB_PWD} \
-APP_DB_NAME=${DB_NAME} \
-APP_CONFIGURATION_FILE=${ROOT_PATH}/hack/config-local.yaml \
-APP_STATIC_USERS_SRC=${ROOT_PATH}/hack/static-users-local.yaml \
-APP_STATIC_GROUPS_SRC=${ROOT_PATH}/hack/static-groups-local.yaml \
-APP_OAUTH20_CLIENT_ENDPOINT="https://oauth2-admin.kyma.local/clients" \
-APP_OAUTH20_PUBLIC_ACCESS_TOKEN_ENDPOINT="https://oauth2.kyma.local/oauth2/token" \
-APP_ONE_TIME_TOKEN_URL="http://connector.not.configured.url/graphql" \
-APP_CONNECTOR_URL="http://connector.not.configured.url/graphql" \
-APP_LEGACY_CONNECTOR_URL="https://adapter-gateway.kyma.local/v1/applications/signingRequests/info" \
-go run ${ROOT_PATH}/cmd/director/main.go
+export APP_DB_USER=${DB_USER}
+export APP_DB_PASSWORD=${DB_PASSWORD}
+export APP_DB_NAME=${DB_NAME}
+export APP_CONFIGURATION_FILE=${ROOT_PATH}/hack/config-local.yaml
+export APP_STATIC_USERS_SRC=${ROOT_PATH}/hack/static-users-local.yaml
+export APP_STATIC_GROUPS_SRC=${ROOT_PATH}/hack/static-groups-local.yaml
+export APP_OAUTH20_CLIENT_ENDPOINT="http://localhost:4445/clients"
+export APP_OAUTH20_PUBLIC_ACCESS_TOKEN_ENDPOINT="https://oauth2.kyma.local/oauth2/token"
+export APP_ONE_TIME_TOKEN_URL="https//compass-connector-internal.compass-system.svc.cluster.local"
+export APP_CONNECTOR_URL="https://compass-gateway.kyma.local/connector/graphql"
+export APP_LEGACY_CONNECTOR_URL="https://adapter-gateway.kyma.local/v1/applications/signingRequests/info"
+CGO_ENABLED=0 go build -o ${ROOT_PATH}/cmd/director/director ${ROOT_PATH}/cmd/director  && \
+dlv --listen=:40022 --headless=true --api-version=2 --accept-multiclient exec ${ROOT_PATH}/cmd/director/director
+

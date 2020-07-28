@@ -22,20 +22,27 @@ type Repository interface {
 	DeleteByIDForObjectGlobal(ctx context.Context, id string, objType model.SystemAuthReferenceObjectType) error
 }
 
+//go:generate mockery -name=SystemAuthRestrictionsRepository -output=automock -outpkg=automock -case=underscore
+type SystemAuthRestrictionsRepository interface {
+	Create(ctx context.Context, item model.SystemAuthRestrictions) error
+}
+
 //go:generate mockery -name=UIDService -output=automock -outpkg=automock -case=underscore
 type UIDService interface {
 	Generate() string
 }
 
 type service struct {
-	repo       Repository
-	uidService UIDService
+	repo                    Repository
+	sysAuthRestrictionsRepo SystemAuthRestrictionsRepository
+	uidService              UIDService
 }
 
-func NewService(repo Repository, uidService UIDService) *service {
+func NewService(repo Repository, sysAuthRestrictionsRepo SystemAuthRestrictionsRepository, uidService UIDService) *service {
 	return &service{
-		repo:       repo,
-		uidService: uidService,
+		repo:                    repo,
+		sysAuthRestrictionsRepo: sysAuthRestrictionsRepo,
+		uidService:              uidService,
 	}
 }
 
@@ -77,6 +84,19 @@ func (s *service) create(ctx context.Context, id string, objectType model.System
 	err = s.repo.Create(ctx, systemAuth)
 	if err != nil {
 		return "", errors.Wrapf(err, "while creating System Auth for %s", objectType)
+	}
+
+	//TODO This is for backward compatibility (a consumer can access its own entry by default); we might decide to change that later on
+	systemAuthRestrictions := model.SystemAuthRestrictions{
+		ID:                  s.uidService.Generate(),
+		SystemAuthID:        systemAuth.ID,
+		AppID:               systemAuth.AppID,
+		RuntimeID:           systemAuth.RuntimeID,
+		IntegrationSystemID: systemAuth.IntegrationSystemID,
+	}
+
+	if err := s.sysAuthRestrictionsRepo.Create(ctx, systemAuthRestrictions); err != nil {
+		return "", errors.Wrapf(err, "while creating System Auth Restrictions for %s", objectType)
 	}
 
 	return systemAuth.ID, nil

@@ -191,3 +191,4 @@ exec:
 deploy-on-minikube: build-to-minikube
 	kubectl set image -n $(NAMESPACE) deployment/$(DEPLOYMENT_NAME) $(COMPONENT_NAME)=$(DEPLOYMENT_NAME):latest
 	kubectl rollout restart -n $(NAMESPACE) deployment/$(DEPLOYMENT_NAME)
+	kubectl rollout status -n $(NAMESPACE) deployment/$(DEPLOYMENT_NAME)

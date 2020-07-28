@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"fmt"
+	"github.com/kyma-incubator/compass/components/director/pkg/persistence"
 
 	"github.com/kyma-incubator/compass/components/director/pkg/apperrors"
 
@@ -17,6 +19,9 @@ import (
 )
 
 const runtimeTable string = `public.runtimes`
+const runtimeRefField string = `runtime_id`
+const systemAuthRestrictionsTable string = `public.system_auth_restrictions`
+const systemAuthRefField string = `system_auth_id`
 
 var (
 	runtimeColumns = []string{"id", "tenant_id", "name", "description", "status_condition", "status_timestamp", "creation_timestamp"}
@@ -213,4 +218,35 @@ func (r *pgRepository) GetOldestForFilters(ctx context.Context, tenant string, f
 	}
 
 	return runtimeModel, nil
+}
+
+func (r *pgRepository) ExistsRuntimeByIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1
+FROM %s AS r 
+JOIN %s AS s on s.%s=r.id 
+WHERE r.tenant_id=$1 r.id=$2 AND s.%s=$3`,
+		runtimeTable,
+		systemAuthRestrictionsTable,
+		runtimeRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) exists(ctx context.Context, stmt, tenantID, id, authID string) (bool, error) {
+	persist, err := persistence.FromCtx(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	var count int
+	if err := persist.Get(&count, stmt, tenantID, id, authID); err != nil {
+		err = persistence.MapSQLError(err, resource.Application, "while getting object from DB")
+		if apperrors.IsNotFoundError(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }

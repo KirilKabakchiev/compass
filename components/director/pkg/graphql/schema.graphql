@@ -3,6 +3,10 @@ HasScopes directive is added automatically to every query and mutation by scopes
 """
 directive @hasScopes(path: String!) on FIELD_DEFINITION
 """
+LimitAccess directive limits the access to a query or a mutation only to allowed consumers.
+"""
+directive @limitAccess(ownerProvider: String!, idField: String!) on FIELD_DEFINITION
+"""
 Validate directive marks mutation arguments that will be validated.
 """
 directive @validate on ARGUMENT_DEFINITION
@@ -120,6 +124,13 @@ enum ViewerType {
 	USER
 }
 
+enum ownerType {
+	RUNTIME
+	APPLICATION
+	INTEGRATION_SYSTEM
+	USER
+}
+
 interface OneTimeToken {
 	token: String!
 	connectorURL: String!
@@ -207,7 +218,6 @@ input ApplicationRegisterInput {
 	"""
 	healthCheckURL: String
 	packages: [PackageCreateInput!]
-	integrationSystemID: ID
 	statusCondition: ApplicationStatusCondition
 }
 
@@ -241,7 +251,6 @@ input ApplicationUpdateInput {
 	**Validation:** valid URL, max=256
 	"""
 	healthCheckURL: String
-	integrationSystemID: ID
 	statusCondition: ApplicationStatusCondition
 }
 
@@ -531,6 +540,24 @@ input RuntimeInput {
 	statusCondition: RuntimeStatusCondition
 }
 
+input SystemAuthAccessForInput {
+	applicationID: String
+	applicationTemplateID: String
+	runtimeID: String
+	integrationSystemID: String
+}
+
+input SystemAuthAccessInput {
+	to: SystemAuthAccessToInput!
+	for: SystemAuthAccessForInput!
+}
+
+input SystemAuthAccessToInput {
+	applicationID: String
+	runtimeID: String
+	integrationSystemID: String
+}
+
 input TemplateValueInput {
 	"""
 	**Validation:**  Up to 36 characters long. Cannot start with a digit. The characters allowed in names are: digits (0-9), lower case letters (a-z),-, and .
@@ -595,7 +622,6 @@ type Application {
 	name: String!
 	providerName: String
 	description: String
-	integrationSystemID: ID
 	labels(key: String): Labels
 	status: ApplicationStatus!
 	webhooks: [Webhook!]
@@ -904,6 +930,24 @@ type SystemAuth {
 	auth: Auth
 }
 
+type SystemAuthAccess {
+	to: SystemAuthAccessTo!
+	for: SystemAuthAccessFor!
+}
+
+type SystemAuthAccessFor {
+	applicationID: String
+	applicationTemplateID: String
+	runtimeID: String
+	integrationSystemID: String
+}
+
+type SystemAuthAccessTo {
+	applicationID: String
+	runtimeID: String
+	integrationSystemID: String
+}
+
 type Tenant {
 	id: ID!
 	internalID: ID!
@@ -953,14 +997,14 @@ type Query {
 	**Examples**
 	- [query application](examples/query-application/query-application.graphql)
 	"""
-	application(id: ID!): Application @hasScopes(path: "graphql.query.application")
+	application(id: ID!): Application @hasScopes(path: "graphql.query.application") @limitAccess(ownerProvider: "GetApplicationID", idField: "id")
 	"""
 	Maximum `first` parameter value is 100
 	
 	**Examples**
 	- [query applications for runtime](examples/query-applications-for-runtime/query-applications-for-runtime.graphql)
 	"""
-	applicationsForRuntime(runtimeID: ID!, first: Int = 100, after: PageCursor): ApplicationPage! @hasScopes(path: "graphql.query.applicationsForRuntime")
+	applicationsForRuntime(runtimeID: ID!, first: Int = 100, after: PageCursor): ApplicationPage! @hasScopes(path: "graphql.query.applicationsForRuntime") @limitAccess(ownerProvider: "GetRuntimeID", idField: "runtimeID")
 	"""
 	Maximum `first` parameter value is 100
 	
@@ -986,7 +1030,7 @@ type Query {
 	**Examples**
 	- [query runtime](examples/query-runtime/query-runtime.graphql)
 	"""
-	runtime(id: ID!): Runtime @hasScopes(path: "graphql.query.runtime")
+	runtime(id: ID!): Runtime @hasScopes(path: "graphql.query.runtime") @limitAccess(ownerProvider: "GetRuntimeID", idField: "id")
 	labelDefinitions: [LabelDefinition!]! @hasScopes(path: "graphql.query.labelDefinitions")
 	"""
 	**Examples**
@@ -1005,7 +1049,7 @@ type Query {
 	**Examples**
 	- [query integration system](examples/query-integration-system/query-integration-system.graphql)
 	"""
-	integrationSystem(id: ID!): IntegrationSystem @hasScopes(path: "graphql.query.integrationSystem")
+	integrationSystem(id: ID!): IntegrationSystem @hasScopes(path: "graphql.query.integrationSystem") @limitAccess(ownerProvider: "GetIntegrationSystemID", idField: "id")
 	viewer: Viewer! @hasScopes(path: "graphql.query.viewer")
 	"""
 	**Examples**
@@ -1042,12 +1086,12 @@ type Mutation {
 	**Examples**
 	- [update application](examples/update-application/update-application.graphql)
 	"""
-	updateApplication(id: ID!, in: ApplicationUpdateInput! @validate): Application! @hasScopes(path: "graphql.mutation.updateApplication")
+	updateApplication(id: ID!, in: ApplicationUpdateInput! @validate): Application! @hasScopes(path: "graphql.mutation.updateApplication") @limitAccess(ownerProvider: "GetApplicationID", idField: "id")
 	"""
 	**Examples**
 	- [unregister application](examples/unregister-application/unregister-application.graphql)
 	"""
-	unregisterApplication(id: ID!): Application! @hasScopes(path: "graphql.mutation.unregisterApplication")
+	unregisterApplication(id: ID!): Application! @hasScopes(path: "graphql.mutation.unregisterApplication") @limitAccess(ownerProvider: "GetApplicationID", idField: "id")
 	"""
 	**Examples**
 	- [create application template](examples/create-application-template/create-application-template.graphql)
@@ -1062,12 +1106,12 @@ type Mutation {
 	**Examples**
 	- [update application template](examples/update-application-template/update-application-template.graphql)
 	"""
-	updateApplicationTemplate(id: ID!, in: ApplicationTemplateInput! @validate): ApplicationTemplate! @hasScopes(path: "graphql.mutation.updateApplicationTemplate")
+	updateApplicationTemplate(id: ID!, in: ApplicationTemplateInput! @validate): ApplicationTemplate! @hasScopes(path: "graphql.mutation.updateApplicationTemplate") @limitAccess(ownerProvider: "GetApplicationTemplateIDByAuthID", idField: "id")
 	"""
 	**Examples**
 	- [delete application template](examples/delete-application-template/delete-application-template.graphql)
 	"""
-	deleteApplicationTemplate(id: ID!): ApplicationTemplate! @hasScopes(path: "graphql.mutation.deleteApplicationTemplate")
+	deleteApplicationTemplate(id: ID!): ApplicationTemplate! @hasScopes(path: "graphql.mutation.deleteApplicationTemplate") @limitAccess(ownerProvider: "GetApplicationTemplateIDByAuthID", idField: "id")
 	"""
 	**Examples**
 	- [register runtime](examples/register-runtime/register-runtime.graphql)
@@ -1077,12 +1121,12 @@ type Mutation {
 	**Examples**
 	- [update runtime](examples/update-runtime/update-runtime.graphql)
 	"""
-	updateRuntime(id: ID!, in: RuntimeInput! @validate): Runtime! @hasScopes(path: "graphql.mutation.updateRuntime")
+	updateRuntime(id: ID!, in: RuntimeInput! @validate): Runtime! @hasScopes(path: "graphql.mutation.updateRuntime") @limitAccess(ownerProvider: "GetRuntimeID", idField: "id")
 	"""
 	**Examples**
 	- [unregister runtime](examples/unregister-runtime/unregister-runtime.graphql)
 	"""
-	unregisterRuntime(id: ID!): Runtime! @hasScopes(path: "graphql.mutation.unregisterRuntime")
+	unregisterRuntime(id: ID!): Runtime! @hasScopes(path: "graphql.mutation.unregisterRuntime") @limitAccess(ownerProvider: "GetRuntimeID", idField: "id")
 	"""
 	**Examples**
 	- [register integration system](examples/register-integration-system/register-integration-system.graphql)
@@ -1092,81 +1136,81 @@ type Mutation {
 	**Examples**
 	- [update integration system](examples/update-integration-system/update-integration-system.graphql)
 	"""
-	updateIntegrationSystem(id: ID!, in: IntegrationSystemInput! @validate): IntegrationSystem! @hasScopes(path: "graphql.mutation.updateIntegrationSystem")
+	updateIntegrationSystem(id: ID!, in: IntegrationSystemInput! @validate): IntegrationSystem! @hasScopes(path: "graphql.mutation.updateIntegrationSystem") @limitAccess(ownerProvider: "GetIntegrationSystemID", idField: "id")
 	"""
 	**Examples**
 	- [unregister integration system](examples/unregister-integration-system/unregister-integration-system.graphql)
 	"""
-	unregisterIntegrationSystem(id: ID!): IntegrationSystem! @hasScopes(path: "graphql.mutation.unregisterIntegrationSystem")
+	unregisterIntegrationSystem(id: ID!): IntegrationSystem! @hasScopes(path: "graphql.mutation.unregisterIntegrationSystem") @limitAccess(ownerProvider: "GetIntegrationSystemID", idField: "id")
 	"""
 	**Examples**
 	- [add application webhook](examples/add-webhook/add-application-webhook.graphql)
 	"""
-	addWebhook(applicationID: ID!, in: WebhookInput! @validate): Webhook! @hasScopes(path: "graphql.mutation.addWebhook")
+	addWebhook(applicationID: ID!, in: WebhookInput! @validate): Webhook! @hasScopes(path: "graphql.mutation.addWebhook") @limitAccess(ownerProvider: "GetApplicationID", idField: "applicationID")
 	"""
 	**Examples**
 	- [update application webhook](examples/update-webhook/update-application-webhook.graphql)
 	"""
-	updateWebhook(webhookID: ID!, in: WebhookInput! @validate): Webhook! @hasScopes(path: "graphql.mutation.updateWebhook")
+	updateWebhook(webhookID: ID!, in: WebhookInput! @validate): Webhook! @hasScopes(path: "graphql.mutation.updateWebhook") @limitAccess(ownerProvider: "GetApplicationIDByWebhookID", idField: "webhookID")
 	"""
 	**Examples**
 	- [delete application webhook](examples/delete-webhook/delete-application-webhook.graphql)
 	"""
-	deleteWebhook(webhookID: ID!): Webhook! @hasScopes(path: "graphql.mutation.deleteWebhook")
+	deleteWebhook(webhookID: ID!): Webhook! @hasScopes(path: "graphql.mutation.deleteWebhook") @limitAccess(ownerProvider: "GetApplicationIDByWebhookID", idField: "webhookID")
 	"""
 	**Examples**
 	- [add api definition to package](examples/add-api-definition-to-package/add-api-definition-to-package.graphql)
 	"""
-	addAPIDefinitionToPackage(packageID: ID!, in: APIDefinitionInput! @validate): APIDefinition! @hasScopes(path: "graphql.mutation.addAPIDefinitionToPackage")
+	addAPIDefinitionToPackage(packageID: ID!, in: APIDefinitionInput! @validate): APIDefinition! @hasScopes(path: "graphql.mutation.addAPIDefinitionToPackage") @limitAccess(ownerProvider: "GetApplicationIDByPackageID", idField: "packageID")
 	"""
 	**Examples**
 	- [update api definition](examples/update-api-definition/update-api-definition.graphql)
 	"""
-	updateAPIDefinition(id: ID!, in: APIDefinitionInput! @validate): APIDefinition! @hasScopes(path: "graphql.mutation.updateAPIDefinition")
+	updateAPIDefinition(id: ID!, in: APIDefinitionInput! @validate): APIDefinition! @hasScopes(path: "graphql.mutation.updateAPIDefinition") @limitAccess(ownerProvider: "GetApplicationIDByAPIDefinitionID", idField: "id")
 	"""
 	**Examples**
 	- [delete api definition](examples/delete-api-definition/delete-api-definition.graphql)
 	"""
-	deleteAPIDefinition(id: ID!): APIDefinition! @hasScopes(path: "graphql.mutation.deleteAPIDefinition")
+	deleteAPIDefinition(id: ID!): APIDefinition! @hasScopes(path: "graphql.mutation.deleteAPIDefinition") @limitAccess(ownerProvider: "GetApplicationIDByAPIDefinitionID", idField: "id")
 	"""
 	**Examples**
 	- [refetch api spec](examples/refetch-api-spec/refetch-api-spec.graphql)
 	"""
-	refetchAPISpec(apiID: ID!): APISpec! @hasScopes(path: "graphql.mutation.refetchAPISpec")
+	refetchAPISpec(apiID: ID!): APISpec! @hasScopes(path: "graphql.mutation.refetchAPISpec") @limitAccess(ownerProvider: "GetApplicationIDByAPIDefinitionID", idField: "apiID")
 	requestOneTimeTokenForRuntime(id: ID!): OneTimeTokenForRuntime! @hasScopes(path: "graphql.mutation.requestOneTimeTokenForRuntime")
 	requestOneTimeTokenForApplication(id: ID!): OneTimeTokenForApplication! @hasScopes(path: "graphql.mutation.requestOneTimeTokenForApplication")
 	requestClientCredentialsForRuntime(id: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.requestClientCredentialsForRuntime")
 	requestClientCredentialsForApplication(id: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.requestClientCredentialsForApplication")
 	requestClientCredentialsForIntegrationSystem(id: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.requestClientCredentialsForIntegrationSystem")
-	deleteSystemAuthForRuntime(authID: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.deleteSystemAuthForRuntime")
-	deleteSystemAuthForApplication(authID: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.deleteSystemAuthForApplication")
-	deleteSystemAuthForIntegrationSystem(authID: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.deleteSystemAuthForIntegrationSystem")
+	deleteSystemAuthForRuntime(authID: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.deleteSystemAuthForRuntime") @limitAccess(ownerProvider: "GetRuntimeIDByAuthID", idField: "authID")
+	deleteSystemAuthForApplication(authID: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.deleteSystemAuthForApplication") @limitAccess(ownerProvider: "GetApplicationIDByAuthID", idField: "authID")
+	deleteSystemAuthForIntegrationSystem(authID: ID!): SystemAuth! @hasScopes(path: "graphql.mutation.deleteSystemAuthForIntegrationSystem") @limitAccess(ownerProvider: "GetIntegrationSystemIDByAuthID", idField: "authID")
 	"""
 	**Examples**
 	- [add event definition to package](examples/add-event-definition-to-package/add-event-definition-to-package.graphql)
 	"""
-	addEventDefinitionToPackage(packageID: ID!, in: EventDefinitionInput! @validate): EventDefinition! @hasScopes(path: "graphql.mutation.addEventDefinitionToPackage")
+	addEventDefinitionToPackage(packageID: ID!, in: EventDefinitionInput! @validate): EventDefinition! @hasScopes(path: "graphql.mutation.addEventDefinitionToPackage") @limitAccess(ownerProvider: "GetApplicationIDByPackageID", idField: "packageID")
 	"""
 	**Examples**
 	- [update event definition](examples/update-event-definition/update-event-definition.graphql)
 	"""
-	updateEventDefinition(id: ID!, in: EventDefinitionInput! @validate): EventDefinition! @hasScopes(path: "graphql.mutation.updateEventDefinition")
+	updateEventDefinition(id: ID!, in: EventDefinitionInput! @validate): EventDefinition! @hasScopes(path: "graphql.mutation.updateEventDefinition") @limitAccess(ownerProvider: "GetApplicationIDByEventDefinitionID", idField: "id")
 	"""
 	**Examples**
 	- [delete event definition](examples/delete-event-definition/delete-event-definition.graphql)
 	"""
-	deleteEventDefinition(id: ID!): EventDefinition! @hasScopes(path: "graphql.mutation.deleteEventDefinition")
-	refetchEventDefinitionSpec(eventID: ID!): EventSpec! @hasScopes(path: "graphql.mutation.refetchEventDefinitionSpec")
+	deleteEventDefinition(id: ID!): EventDefinition! @hasScopes(path: "graphql.mutation.deleteEventDefinition") @limitAccess(ownerProvider: "GetApplicationIDByEventDefinitionID", idField: "id")
+	refetchEventDefinitionSpec(eventID: ID!): EventSpec! @hasScopes(path: "graphql.mutation.refetchEventDefinitionSpec") @limitAccess(ownerProvider: "GetApplicationIDByEventDefinitionID", idField: "eventID")
 	"""
 	**Examples**
 	- [add document to package](examples/add-document-to-package/add-document-to-package.graphql)
 	"""
-	addDocumentToPackage(packageID: ID!, in: DocumentInput! @validate): Document! @hasScopes(path: "graphql.mutation.addDocumentToPackage")
+	addDocumentToPackage(packageID: ID!, in: DocumentInput! @validate): Document! @hasScopes(path: "graphql.mutation.addDocumentToPackage") @limitAccess(ownerProvider: "GetApplicationIDByPackageID", idField: "packageID")
 	"""
 	**Examples**
 	- [delete document](examples/delete-document/delete-document.graphql)
 	"""
-	deleteDocument(id: ID!): Document! @hasScopes(path: "graphql.mutation.deleteDocument")
+	deleteDocument(id: ID!): Document! @hasScopes(path: "graphql.mutation.deleteDocument") @limitAccess(ownerProvider: "GetApplicationIDByDocumentID", idField: "id")
 	"""
 	**Examples**
 	- [create label definition](examples/create-label-definition/create-label-definition.graphql)
@@ -1188,22 +1232,22 @@ type Mutation {
 	**Examples**
 	- [set application label](examples/set-application-label/set-application-label.graphql)
 	"""
-	setApplicationLabel(applicationID: ID!, key: String!, value: Any!): Label! @hasScopes(path: "graphql.mutation.setApplicationLabel")
+	setApplicationLabel(applicationID: ID!, key: String!, value: Any!): Label! @hasScopes(path: "graphql.mutation.setApplicationLabel") @limitAccess(ownerProvider: "GetApplicationID", idField: "applicationID")
 	"""
 	If Application does not exist or the label key is not found, it returns an error.
 	
 	**Examples**
 	- [delete application label](examples/delete-application-label/delete-application-label.graphql)
 	"""
-	deleteApplicationLabel(applicationID: ID!, key: String!): Label! @hasScopes(path: "graphql.mutation.deleteApplicationLabel")
+	deleteApplicationLabel(applicationID: ID!, key: String!): Label! @hasScopes(path: "graphql.mutation.deleteApplicationLabel") @limitAccess(ownerProvider: "GetApplicationID", idField: "applicationID")
 	"""
 	If a label with given key already exist, it will be replaced with provided value.
 	"""
-	setRuntimeLabel(runtimeID: ID!, key: String!, value: Any!): Label! @hasScopes(path: "graphql.mutation.setRuntimeLabel")
+	setRuntimeLabel(runtimeID: ID!, key: String!, value: Any!): Label! @hasScopes(path: "graphql.mutation.setRuntimeLabel") @limitAccess(ownerProvider: "GetRuntimeID", idField: "runtimeID")
 	"""
 	If Runtime does not exist or the label key is not found, it returns an error.
 	"""
-	deleteRuntimeLabel(runtimeID: ID!, key: String!): Label! @hasScopes(path: "graphql.mutation.deleteRuntimeLabel")
+	deleteRuntimeLabel(runtimeID: ID!, key: String!): Label! @hasScopes(path: "graphql.mutation.deleteRuntimeLabel") @limitAccess(ownerProvider: "GetRuntimeID", idField: "runtimeID")
 	setDefaultEventingForApplication(appID: String!, runtimeID: String!): ApplicationEventingConfiguration! @hasScopes(path: "graphql.mutation.setDefaultEventingForApplication")
 	deleteDefaultEventingForApplication(appID: String!): ApplicationEventingConfiguration! @hasScopes(path: "graphql.mutation.deleteDefaultEventingForApplication")
 	"""
@@ -1214,12 +1258,12 @@ type Mutation {
 	**Examples**
 	- [set package instance auth](examples/set-package-instance-auth/set-package-instance-auth.graphql)
 	"""
-	setPackageInstanceAuth(authID: ID!, in: PackageInstanceAuthSetInput! @validate): PackageInstanceAuth! @hasScopes(path: "graphql.mutation.setPackageInstanceAuth")
+	setPackageInstanceAuth(authID: ID!, in: PackageInstanceAuthSetInput! @validate): PackageInstanceAuth! @hasScopes(path: "graphql.mutation.setPackageInstanceAuth") @limitAccess(ownerProvider: "GetApplicationIDByPackageInstanceAuthID", idField: "authID")
 	"""
 	**Examples**
 	- [delete package instance auth](examples/delete-package-instance-auth/delete-package-instance-auth.graphql)
 	"""
-	deletePackageInstanceAuth(authID: ID!): PackageInstanceAuth! @hasScopes(path: "graphql.mutation.deletePackageInstanceAuth")
+	deletePackageInstanceAuth(authID: ID!): PackageInstanceAuth! @hasScopes(path: "graphql.mutation.deletePackageInstanceAuth") @limitAccess(ownerProvider: "GetApplicationIDByPackageInstanceAuthID", idField: "authID")
 	"""
 	When defaultInstanceAuth is set, it fires "createPackageInstanceAuth" mutation. Otherwise, the status of the PackageInstanceAuth is set to PENDING.
 	
@@ -1238,17 +1282,17 @@ type Mutation {
 	**Examples**
 	- [add package](examples/add-package/add-package.graphql)
 	"""
-	addPackage(applicationID: ID!, in: PackageCreateInput! @validate): Package! @hasScopes(path: "graphql.mutation.addPackage")
+	addPackage(applicationID: ID!, in: PackageCreateInput! @validate): Package! @hasScopes(path: "graphql.mutation.addPackage") @limitAccess(ownerProvider: "GetApplicationID", idField: "applicationID")
 	"""
 	**Examples**
 	- [update package](examples/update-package/update-package.graphql)
 	"""
-	updatePackage(id: ID!, in: PackageUpdateInput! @validate): Package! @hasScopes(path: "graphql.mutation.updatePackage")
+	updatePackage(id: ID!, in: PackageUpdateInput! @validate): Package! @hasScopes(path: "graphql.mutation.updatePackage") @limitAccess(ownerProvider: "GetApplicationIDByPackageID", idField: "id")
 	"""
 	**Examples**
 	- [delete package](examples/delete-package/delete-package.graphql)
 	"""
-	deletePackage(id: ID!): Package! @hasScopes(path: "graphql.mutation.deletePackage")
+	deletePackage(id: ID!): Package! @hasScopes(path: "graphql.mutation.deletePackage") @limitAccess(ownerProvider: "GetApplicationIDByPackageID", idField: "id")
 	"""
 	**Examples**
 	- [create automatic scenario assignment](examples/create-automatic-scenario-assignment/create-automatic-scenario-assignment.graphql)
@@ -1264,5 +1308,7 @@ type Mutation {
 	- [delete automatic scenario assignments for selector](examples/delete-automatic-scenario-assignments-for-selector/delete-automatic-scenario-assignments-for-selector.graphql)
 	"""
 	deleteAutomaticScenarioAssignmentsForSelector(selector: LabelSelectorInput!): [AutomaticScenarioAssignment!]! @hasScopes(path: "graphql.mutation.deleteAutomaticScenarioAssignmentsForSelector")
+	grantSystemAccess(in: SystemAuthAccessInput! @validate): SystemAuthAccess @hasScopes(path: "graphql.mutation.grantSystemAccess")
+	revokeSystemAccess(in: SystemAuthAccessInput! @validate): SystemAuthAccess @hasScopes(path: "graphql.mutation.revokeSystemAccess")
 }
 

@@ -32,15 +32,14 @@ func (c *converter) ToEntity(in *model.Application) (*Entity, error) {
 	}
 
 	return &Entity{
-		ID:                  in.ID,
-		TenantID:            in.Tenant,
-		Name:                in.Name,
-		Description:         repo.NewNullableString(in.Description),
-		StatusCondition:     string(in.Status.Condition),
-		StatusTimestamp:     in.Status.Timestamp,
-		HealthCheckURL:      repo.NewNullableString(in.HealthCheckURL),
-		IntegrationSystemID: repo.NewNullableString(in.IntegrationSystemID),
-		ProviderName:        repo.NewNullableString(in.ProviderName),
+		ID:              in.ID,
+		TenantID:        in.Tenant,
+		Name:            in.Name,
+		Description:     repo.NewNullableString(in.Description),
+		StatusCondition: string(in.Status.Condition),
+		StatusTimestamp: in.Status.Timestamp,
+		HealthCheckURL:  repo.NewNullableString(in.HealthCheckURL),
+		ProviderName:    repo.NewNullableString(in.ProviderName),
 	}, nil
 }
 
@@ -58,9 +57,8 @@ func (c *converter) FromEntity(entity *Entity) *model.Application {
 			Condition: model.ApplicationStatusCondition(entity.StatusCondition),
 			Timestamp: entity.StatusTimestamp,
 		},
-		IntegrationSystemID: repo.StringPtrFromNullableString(entity.IntegrationSystemID),
-		HealthCheckURL:      repo.StringPtrFromNullableString(entity.HealthCheckURL),
-		ProviderName:        repo.StringPtrFromNullableString(entity.ProviderName),
+		HealthCheckURL: repo.StringPtrFromNullableString(entity.HealthCheckURL),
+		ProviderName:   repo.StringPtrFromNullableString(entity.ProviderName),
 	}
 }
 
@@ -70,13 +68,12 @@ func (c *converter) ToGraphQL(in *model.Application) *graphql.Application {
 	}
 
 	return &graphql.Application{
-		ID:                  in.ID,
-		Status:              c.statusToGraphQL(in.Status),
-		Name:                in.Name,
-		Description:         in.Description,
-		HealthCheckURL:      in.HealthCheckURL,
-		IntegrationSystemID: in.IntegrationSystemID,
-		ProviderName:        in.ProviderName,
+		ID:             in.ID,
+		Status:         c.statusToGraphQL(in.Status),
+		Name:           in.Name,
+		Description:    in.Description,
+		HealthCheckURL: in.HealthCheckURL,
+		ProviderName:   in.ProviderName,
 	}
 }
 
@@ -96,7 +93,7 @@ func (c *converter) MultipleToGraphQL(in []*model.Application) []*graphql.Applic
 func (c *converter) CreateInputFromGraphQL(in graphql.ApplicationRegisterInput) (model.ApplicationRegisterInput, error) {
 	var labels map[string]interface{}
 	if in.Labels != nil {
-		labels = *in.Labels
+		labels = in.Labels
 	}
 
 	webhooks, err := c.webhook.MultipleInputFromGraphQL(in.Webhooks)
@@ -110,25 +107,23 @@ func (c *converter) CreateInputFromGraphQL(in graphql.ApplicationRegisterInput) 
 	}
 
 	return model.ApplicationRegisterInput{
-		Name:                in.Name,
-		Description:         in.Description,
-		Labels:              labels,
-		HealthCheckURL:      in.HealthCheckURL,
-		IntegrationSystemID: in.IntegrationSystemID,
-		StatusCondition:     c.statusConditionToModel(in.StatusCondition),
-		ProviderName:        in.ProviderName,
-		Webhooks:            webhooks,
-		Packages:            packages,
+		Name:            in.Name,
+		Description:     in.Description,
+		Labels:          labels,
+		HealthCheckURL:  in.HealthCheckURL,
+		StatusCondition: c.statusConditionToModel(in.StatusCondition),
+		ProviderName:    in.ProviderName,
+		Webhooks:        webhooks,
+		Packages:        packages,
 	}, nil
 }
 
 func (c *converter) UpdateInputFromGraphQL(in graphql.ApplicationUpdateInput) model.ApplicationUpdateInput {
 	return model.ApplicationUpdateInput{
-		Description:         in.Description,
-		HealthCheckURL:      in.HealthCheckURL,
-		IntegrationSystemID: in.IntegrationSystemID,
-		ProviderName:        in.ProviderName,
-		StatusCondition:     c.statusConditionToModel(in.StatusCondition),
+		Description:     in.Description,
+		HealthCheckURL:  in.HealthCheckURL,
+		ProviderName:    in.ProviderName,
+		StatusCondition: c.statusConditionToModel(in.StatusCondition),
 	}
 }
 
@@ -157,14 +152,13 @@ func (c *converter) GraphQLToModel(obj *graphql.Application, tenantID string) *m
 	}
 
 	return &model.Application{
-		ID:                  obj.ID,
-		ProviderName:        obj.ProviderName,
-		Tenant:              tenantID,
-		Name:                obj.Name,
-		Description:         obj.Description,
-		Status:              c.statusToModel(obj.Status),
-		HealthCheckURL:      obj.HealthCheckURL,
-		IntegrationSystemID: obj.IntegrationSystemID,
+		ID:             obj.ID,
+		ProviderName:   obj.ProviderName,
+		Tenant:         tenantID,
+		Name:           obj.Name,
+		Description:    obj.Description,
+		Status:         c.statusToModel(obj.Status),
+		HealthCheckURL: obj.HealthCheckURL,
 	}
 }
 

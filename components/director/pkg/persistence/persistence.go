@@ -43,21 +43,14 @@ type Transactioner interface {
 	Stats() sql.DBStats
 }
 
-type db struct {
-	sqlDB  *sqlx.DB
+// DB represents the database
+type DB struct {
+	*sqlx.DB
 	logger *logrus.Logger
 }
 
-func (db *db) PingContext(ctx context.Context) error {
-	return db.sqlDB.PingContext(ctx)
-}
-
-func (db *db) Stats() sql.DBStats {
-	return db.sqlDB.Stats()
-}
-
-func (db *db) Begin() (PersistenceTx, error) {
-	tx, err := db.sqlDB.Beginx()
+func (db *DB) Begin() (PersistenceTx, error) {
+	tx, err := db.Beginx()
 	customTx := &Transaction{
 		Tx:        tx,
 		committed: false,
@@ -65,7 +58,7 @@ func (db *db) Begin() (PersistenceTx, error) {
 	return PersistenceTx(customTx), err
 }
 
-func (db *db) RollbackUnlessCommitted(tx PersistenceTx) {
+func (db *DB) RollbackUnlessCommitted(tx PersistenceTx) {
 	customTx, ok := tx.(*Transaction)
 	if !ok {
 		db.logger.Warn("state aware transaction is not in use")
@@ -77,7 +70,7 @@ func (db *db) RollbackUnlessCommitted(tx PersistenceTx) {
 	db.rollback(customTx)
 }
 
-func (db *db) rollback(tx PersistenceTx) {
+func (db *DB) rollback(tx PersistenceTx) {
 	err := tx.Rollback()
 	if err == nil {
 		db.logger.Warn("transaction rolled back")
@@ -120,13 +113,13 @@ type PersistenceOp interface {
 }
 
 // Configure returns the instance of the database
-func Configure(logger *logrus.Logger, conf DatabaseConfig) (Transactioner, func() error, error) {
+func Configure(logger *logrus.Logger, conf DatabaseConfig) (*DB, func() error, error) {
 	db, closeFunc, err := waitForPersistance(logger, conf, RetryCount)
 
 	return db, closeFunc, err
 }
 
-func waitForPersistance(logger *logrus.Logger, conf DatabaseConfig, retryCount int) (Transactioner, func() error, error) {
+func waitForPersistance(logger *logrus.Logger, conf DatabaseConfig, retryCount int) (*DB, func() error, error) {
 	var sqlxDB *sqlx.DB
 	var err error
 	for i := 0; i < retryCount; i++ {
@@ -151,8 +144,7 @@ func waitForPersistance(logger *logrus.Logger, conf DatabaseConfig, retryCount i
 		sqlxDB.SetMaxOpenConns(conf.MaxOpenConnections)
 		sqlxDB.SetMaxIdleConns(conf.MaxIdleConnections)
 		sqlxDB.SetConnMaxLifetime(conf.ConnMaxLifetime)
-		return &db{sqlDB: sqlxDB, logger: logger}, sqlxDB.Close, nil
-
+		return &DB{DB: sqlxDB, logger: logger}, sqlxDB.Close, nil
 	}
 
 	return nil, nil, err

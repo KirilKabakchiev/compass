@@ -1,18 +1,18 @@
 # Required scopes for specific GraphQL operations
 graphql:
   query:
-    applications: ["application:read"]
+    applications: ["application:list"]
     application: ["application:read"]
     applicationsForRuntime: ["application:read"]
     applicationTemplates: ["application_template:read"]
     applicationTemplate: ["application_template:read"]
-    runtimes: ["runtime:read"]
+    runtimes: ["runtime:list"]
     runtime: ["runtime:read"]
     labelDefinitions: ["label_definition:read"]
     labelDefinition: ["label_definition:read"]
     healthChecks: ["health_checks:read"]
     integrationSystem: ["integration_system:read"]
-    integrationSystems: ["integration_system:read"]
+    integrationSystems: ["integration_system:list"]
     viewer: []
     tenants: ["tenant:read"]
     automaticScenarioAssignments: ["automatic_scenario_assignment:read"]
@@ -73,6 +73,8 @@ graphql:
     createAutomaticScenarioAssignment: ["automatic_scenario_assignment:write"]
     deleteAutomaticScenarioAssignmentForScenario: ["automatic_scenario_assignment:write"]
     deleteAutomaticScenarioAssignmentsForSelector: ["automatic_scenario_assignment:write"]
+    grantSystemAccess: ["system_access:write"]
+    revokeSystemAccess: ["system_access:write"]
 
 # Scopes assigned for every new Client Credentials by given object type (Runtime / Application / Integration System)
 clientCredentialsRegistrationScopes:

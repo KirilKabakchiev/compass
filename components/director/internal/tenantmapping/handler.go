@@ -37,6 +37,10 @@ type ObjectContextForSystemAuthProvider interface {
 //go:generate mockery -name=Logger -output=automock -outpkg=automock -case=underscore
 type Logger interface {
 	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
+
+	Info(args ...interface{})
+	Infof(format string, args ...interface{})
 }
 
 //go:generate mockery -name=TenantRepository -output=automock -outpkg=automock -case=underscore
@@ -107,6 +111,8 @@ func (h *Handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
 	reqData.Body.Extra["scope"] = objCtx.Scopes
 	reqData.Body.Extra["consumerID"] = objCtx.ConsumerID
 	reqData.Body.Extra["consumerType"] = objCtx.ConsumerType
+	reqData.Body.Extra["consumerLevel"] = objCtx.ConsumerLevel
+	reqData.Body.Extra["systemAuthID"] = objCtx.SystemAuthID
 
 	h.respond(writer, reqData.Body)
 }
@@ -116,7 +122,7 @@ func (h *Handler) getObjectContext(ctx context.Context, reqData oathkeeper.ReqDa
 	if err != nil {
 		return ObjectContext{}, errors.Wrap(err, "while determining the auth ID from the request")
 	}
-
+	h.logger.Infof("Getting object context for authFlow %s and authID %s", authFlow, authID)
 	switch authFlow {
 	case oathkeeper.JWTAuthFlow:
 		return h.mapperForUser.GetObjectContext(ctx, reqData, authID)

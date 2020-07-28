@@ -4,12 +4,15 @@
       - {{ .id }}
     {{- end }}
   scopes:
+  - "application:list"
   - "application:read"
   - "application:write"
   - "application_template:read"
   - "application_template:write"
+  - "integration_system:list"
   - "integration_system:read"
   - "integration_system:write"
+  - "runtime:list"
   - "runtime:read"
   - "runtime:write"
   - "label_definition:read"
@@ -18,3 +21,4 @@
   - "tenant:read"
   - "automatic_scenario_assignment:read"
   - "automatic_scenario_assignment:write"
+  - "system_access:write"

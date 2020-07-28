@@ -14,9 +14,18 @@ const (
 	User              ConsumerType = "Static User"
 )
 
+type ConsumerLevel string
+
+const (
+	Restricted   ConsumerLevel = "RESTRICTED"
+	Unrestricted ConsumerLevel = "UNRESTRICTED"
+)
+
 type Consumer struct {
-	ConsumerID string
+	ConsumerID   string
+	SystemAuthID string
 	ConsumerType
+	ConsumerLevel
 }
 
 func MapSystemAuthToConsumerType(refObj model.SystemAuthReferenceObjectType) (ConsumerType, error) {

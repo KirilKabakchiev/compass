@@ -7,14 +7,13 @@ import (
 )
 
 type Application struct {
-	ID                  string
-	ProviderName        *string
-	Tenant              string
-	Name                string
-	Description         *string
-	Status              *ApplicationStatus
-	HealthCheckURL      *string
-	IntegrationSystemID *string
+	ID             string
+	ProviderName   *string
+	Tenant         string
+	Name           string
+	Description    *string
+	Status         *ApplicationStatus
+	HealthCheckURL *string
 }
 
 func (app *Application) SetFromUpdateInput(update ApplicationUpdateInput, timestamp time.Time) {
@@ -24,7 +23,6 @@ func (app *Application) SetFromUpdateInput(update ApplicationUpdateInput, timest
 
 	app.Description = update.Description
 	app.HealthCheckURL = update.HealthCheckURL
-	app.IntegrationSystemID = update.IntegrationSystemID
 	app.ProviderName = update.ProviderName
 	app.Status.Condition = getApplicationStatusConditionOrDefault(update.StatusCondition)
 	app.Status.Timestamp = timestamp
@@ -50,15 +48,14 @@ type ApplicationPage struct {
 }
 
 type ApplicationRegisterInput struct {
-	Name                string
-	ProviderName        *string
-	Description         *string
-	Labels              map[string]interface{}
-	HealthCheckURL      *string
-	Webhooks            []*WebhookInput
-	Packages            []*PackageCreateInput
-	IntegrationSystemID *string
-	StatusCondition     *ApplicationStatusCondition
+	Name            string
+	ProviderName    *string
+	Description     *string
+	Labels          map[string]interface{}
+	HealthCheckURL  *string
+	Webhooks        []*WebhookInput
+	Packages        []*PackageCreateInput
+	StatusCondition *ApplicationStatusCondition
 }
 
 func (i *ApplicationRegisterInput) ToApplication(timestamp time.Time, id, tenant string) *Application {
@@ -67,13 +64,12 @@ func (i *ApplicationRegisterInput) ToApplication(timestamp time.Time, id, tenant
 	}
 
 	return &Application{
-		ID:                  id,
-		Name:                i.Name,
-		Description:         i.Description,
-		Tenant:              tenant,
-		HealthCheckURL:      i.HealthCheckURL,
-		IntegrationSystemID: i.IntegrationSystemID,
-		ProviderName:        i.ProviderName,
+		ID:             id,
+		Name:           i.Name,
+		Description:    i.Description,
+		Tenant:         tenant,
+		HealthCheckURL: i.HealthCheckURL,
+		ProviderName:   i.ProviderName,
 		Status: &ApplicationStatus{
 			Condition: getApplicationStatusConditionOrDefault(i.StatusCondition),
 			Timestamp: timestamp,
@@ -91,9 +87,8 @@ func getApplicationStatusConditionOrDefault(in *ApplicationStatusCondition) Appl
 }
 
 type ApplicationUpdateInput struct {
-	ProviderName        *string
-	Description         *string
-	HealthCheckURL      *string
-	IntegrationSystemID *string
-	StatusCondition     *ApplicationStatusCondition
+	ProviderName    *string
+	Description     *string
+	HealthCheckURL  *string
+	StatusCondition *ApplicationStatusCondition
 }

@@ -12,6 +12,7 @@ const (
 	IntegrationSystem          Type = "IntegrationSystem"
 	Tenant                     Type = "Tenant"
 	SystemAuth                 Type = "SystemAuth"
+	SystemAuthRestrictions     Type = "SystemAuthRestrictions"
 	FetchRequest               Type = "FetchRequest"
 	Document                   Type = "Document"
 	PackageInstanceAuth        Type = "PackageInstanceAuth"

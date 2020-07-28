@@ -61,6 +61,7 @@ func (c *converter) ToEntity(in model.SystemAuth) (Entity, error) {
 		RuntimeID:           repo.NewNullableString(in.RuntimeID),
 		IntegrationSystemID: repo.NewNullableString(in.IntegrationSystemID),
 		Value:               value,
+		AccessLevel:         in.AccessLevel,
 	}, nil
 }
 
@@ -82,5 +83,6 @@ func (c *converter) FromEntity(in Entity) (model.SystemAuth, error) {
 		RuntimeID:           repo.StringPtrFromNullableString(in.RuntimeID),
 		IntegrationSystemID: repo.StringPtrFromNullableString(in.IntegrationSystemID),
 		Value:               value,
+		AccessLevel:         in.AccessLevel,
 	}, nil
 }

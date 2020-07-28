@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"github.com/kyma-incubator/compass/components/director/internal/consumer"
 
 	"github.com/kyma-incubator/compass/components/director/pkg/resource"
 
@@ -58,6 +59,11 @@ type IntegrationSystemRepository interface {
 	Exists(ctx context.Context, id string) (bool, error)
 }
 
+//go:generate mockery -name=SystemAuthRestrictionsRepository -output=automock -outpkg=automock -case=underscore
+type SystemAuthRestrictionsRepository interface {
+	Create(ctx context.Context, item model.SystemAuthRestrictions) error
+}
+
 //go:generate mockery -name=LabelUpsertService -output=automock -outpkg=automock -case=underscore
 type LabelUpsertService interface {
 	UpsertMultipleLabels(ctx context.Context, tenant string, objectType model.LabelableObject, objectID string, labels map[string]interface{}) error
@@ -83,11 +89,12 @@ type ApplicationHideCfgProvider interface {
 type service struct {
 	appHideCfgProvider ApplicationHideCfgProvider
 
-	appRepo       ApplicationRepository
-	webhookRepo   WebhookRepository
-	labelRepo     LabelRepository
-	runtimeRepo   RuntimeRepository
-	intSystemRepo IntegrationSystemRepository
+	appRepo                 ApplicationRepository
+	webhookRepo             WebhookRepository
+	labelRepo               LabelRepository
+	runtimeRepo             RuntimeRepository
+	intSystemRepo           IntegrationSystemRepository
+	sysAuthRestrictionsRepo SystemAuthRestrictionsRepository
 
 	labelUpsertService LabelUpsertService
 	scenariosService   ScenariosService
@@ -96,19 +103,30 @@ type service struct {
 	timestampGen       timestamp.Generator
 }
 
-func NewService(appHideCfgProvider ApplicationHideCfgProvider, app ApplicationRepository, webhook WebhookRepository, runtimeRepo RuntimeRepository, labelRepo LabelRepository, intSystemRepo IntegrationSystemRepository, labelUpsertService LabelUpsertService, scenariosService ScenariosService, pkgService PackageService, uidService UIDService) *service {
+func NewService(appHideCfgProvider ApplicationHideCfgProvider,
+	app ApplicationRepository,
+	webhook WebhookRepository,
+	runtimeRepo RuntimeRepository,
+	labelRepo LabelRepository,
+	intSystemRepo IntegrationSystemRepository,
+	sysAuthRestrictionsRepo SystemAuthRestrictionsRepository,
+	labelUpsertService LabelUpsertService,
+	scenariosService ScenariosService,
+	pkgService PackageService,
+	uidService UIDService) *service {
 	return &service{
-		appHideCfgProvider: appHideCfgProvider,
-		appRepo:            app,
-		webhookRepo:        webhook,
-		runtimeRepo:        runtimeRepo,
-		labelRepo:          labelRepo,
-		intSystemRepo:      intSystemRepo,
-		labelUpsertService: labelUpsertService,
-		scenariosService:   scenariosService,
-		pkgService:         pkgService,
-		uidService:         uidService,
-		timestampGen:       timestamp.DefaultGenerator(),
+		appHideCfgProvider:      appHideCfgProvider,
+		appRepo:                 app,
+		webhookRepo:             webhook,
+		labelRepo:               labelRepo,
+		runtimeRepo:             runtimeRepo,
+		intSystemRepo:           intSystemRepo,
+		sysAuthRestrictionsRepo: sysAuthRestrictionsRepo,
+		labelUpsertService:      labelUpsertService,
+		scenariosService:        scenariosService,
+		uidService:              uidService,
+		pkgService:              pkgService,
+		timestampGen:            timestamp.DefaultGenerator(),
 	}
 }
 
@@ -216,17 +234,20 @@ func (s *service) Create(ctx context.Context, in model.ApplicationRegisterInput)
 		return "", err
 	}
 
-	exists, err := s.ensureIntSysExists(ctx, in.IntegrationSystemID)
-	if err != nil {
-		return "", errors.Wrap(err, "while ensuring integration system exists")
-	}
-
-	if !exists {
-		return "", apperrors.NewNotFoundError(resource.IntegrationSystem, *in.IntegrationSystemID)
-	}
-
 	id := s.uidService.Generate()
 	app := in.ToApplication(s.timestampGen(), id, appTenant)
+
+	//TODO probably move to templates
+	//if in.IntegrationSystemID != nil {
+	//	exists, err := s.ensureIntSysExists(ctx, in.IntegrationSystemID)
+	//	if err != nil {
+	//		return "", errors.Wrap(err, "while ensuring integration system exists")
+	//	}
+	//
+	//	if !exists {
+	//		return "", apperrors.NewNotFoundError(resource.IntegrationSystem, *in.IntegrationSystemID)
+	//	}
+	//}
 
 	err = s.appRepo.Create(ctx, app)
 	if err != nil {
@@ -242,10 +263,12 @@ func (s *service) Create(ctx context.Context, in model.ApplicationRegisterInput)
 	if in.Labels == nil {
 		in.Labels = map[string]interface{}{}
 	}
-	in.Labels[intSysKey] = ""
-	if in.IntegrationSystemID != nil {
-		in.Labels[intSysKey] = *in.IntegrationSystemID
-	}
+
+	//TODO can we fully remove this label ?
+	//in.Labels[intSysKey] = ""
+	//if in.IntegrationSystemID != nil {
+	//	in.Labels[intSysKey] = *in.IntegrationSystemID
+	//}
 	in.Labels[nameKey] = in.Name
 
 	err = s.labelUpsertService.UpsertMultipleLabels(ctx, appTenant, model.ApplicationLabelableObject, id, in.Labels)
@@ -265,19 +288,34 @@ func (s *service) Create(ctx context.Context, in model.ApplicationRegisterInput)
 		}
 	}
 
+	cons, err := consumer.LoadFromContext(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "while getting consumer from context")
+	}
+
+	if cons.ConsumerType != consumer.User {
+		if err := s.sysAuthRestrictionsRepo.Create(ctx, model.SystemAuthRestrictions{
+			ID:           s.uidService.Generate(),
+			SystemAuthID: cons.SystemAuthID,
+			AppID:        &id,
+		}); err != nil {
+			return "", errors.Wrapf(err, "while creating System Auth restrictions for application")
+		}
+	}
+
 	return id, nil
 }
 
 func (s *service) Update(ctx context.Context, id string, in model.ApplicationUpdateInput) error {
-	exists, err := s.ensureIntSysExists(ctx, in.IntegrationSystemID)
-	if err != nil {
-		return errors.Wrap(err, "while validating Integration System ID")
-	}
-
-	if !exists {
-		return apperrors.NewNotFoundError(resource.IntegrationSystem, *in.IntegrationSystemID)
-	}
-
+	//exists, err := s.ensureIntSysExists(ctx, in.IntegrationSystemID)
+	//if err != nil {
+	//	return errors.Wrap(err, "while validating Integration System ID")
+	//}
+	//
+	//if !exists {
+	//	return apperrors.NewNotFoundError(resource.IntegrationSystem, *in.IntegrationSystemID)
+	//}
+	//
 	app, err := s.Get(ctx, id)
 	if err != nil {
 		return errors.Wrap(err, "while getting Application")
@@ -290,14 +328,15 @@ func (s *service) Update(ctx context.Context, id string, in model.ApplicationUpd
 		return errors.Wrap(err, "while updating Application")
 	}
 
-	intSysLabel := createLabel(intSysKey, "", id)
-	if in.IntegrationSystemID != nil {
-		intSysLabel = createLabel(intSysKey, *in.IntegrationSystemID, id)
-	}
-	err = s.SetLabel(ctx, intSysLabel)
-	if err != nil {
-		return errors.Wrap(err, "while setting the integration system label")
-	}
+	//TODO can we fully remove this label ?
+	//intSysLabel := createLabel(intSysKey, "", id)
+	//if in.IntegrationSystemID != nil {
+	//	intSysLabel = createLabel(intSysKey, *in.IntegrationSystemID, id)
+	//}
+	//err = s.SetLabel(ctx, intSysLabel)
+	//if err != nil {
+	//	return errors.Wrap(err, "while setting the integration system label")
+	//}
 
 	labelName := createLabel(nameKey, app.Name, app.ID)
 	err = s.SetLabel(ctx, labelName)
@@ -433,10 +472,6 @@ func createLabel(key string, value string, objectID string) *model.LabelInput {
 }
 
 func (s *service) ensureIntSysExists(ctx context.Context, id *string) (bool, error) {
-	if id == nil {
-		return true, nil
-	}
-
 	exists, err := s.intSystemRepo.Exists(ctx, *id)
 	if err != nil {
 		return false, err

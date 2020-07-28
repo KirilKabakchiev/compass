@@ -22,16 +22,20 @@ func NewTenantContext(externalTenantID, tenantID string) TenantContext {
 
 type ObjectContext struct {
 	TenantContext
-	Scopes       string
-	ConsumerID   string
-	ConsumerType consumer.ConsumerType
+	Scopes        string
+	SystemAuthID  string
+	ConsumerID    string
+	ConsumerType  consumer.ConsumerType
+	ConsumerLevel consumer.ConsumerLevel
 }
 
-func NewObjectContext(tenantCtx TenantContext, scopes, consumerID string, consumerType consumer.ConsumerType) ObjectContext {
+func NewObjectContext(tenantCtx TenantContext, scopes, consumerID string, systemAuthID string, consumerType consumer.ConsumerType, consumerLevel consumer.ConsumerLevel) ObjectContext {
 	return ObjectContext{
 		TenantContext: tenantCtx,
 		Scopes:        scopes,
+		SystemAuthID:  systemAuthID,
 		ConsumerID:    consumerID,
 		ConsumerType:  consumerType,
+		ConsumerLevel: consumerLevel,
 	}
 }

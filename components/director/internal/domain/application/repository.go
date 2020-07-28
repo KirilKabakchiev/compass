@@ -3,22 +3,32 @@ package application
 import (
 	"context"
 	"fmt"
-
-	"github.com/kyma-incubator/compass/components/director/pkg/resource"
-
 	"github.com/google/uuid"
 	"github.com/kyma-incubator/compass/components/director/internal/domain/label"
 	"github.com/kyma-incubator/compass/components/director/internal/labelfilter"
 	"github.com/kyma-incubator/compass/components/director/internal/model"
 	"github.com/kyma-incubator/compass/components/director/internal/repo"
 	"github.com/kyma-incubator/compass/components/director/pkg/apperrors"
+	"github.com/kyma-incubator/compass/components/director/pkg/persistence"
+	"github.com/kyma-incubator/compass/components/director/pkg/resource"
 	"github.com/pkg/errors"
 )
 
 const applicationTable string = `public.applications`
+const packageTable string = `public.packages`
+const webhookTable string = `public.webhooks`
+const documentsTable string = `public.documents`
+const eventDefinitionsTable string = `public.event_api_definitions`
+const apiDefinitionsTable string = `public.api_definitions`
+const packgeInstanceauthTable string = `public.package_instance_auths`
+const systemAuthRestrictionsTable string = `public.system_auth_restrictions`
+
+const applicationRefField string = `app_id`
+const systemAuthRefField string = `system_auth_id`
+const packageRefField string = `package_id`
 
 var (
-	applicationColumns = []string{"id", "tenant_id", "name", "description", "status_condition", "status_timestamp", "healthcheck_url", "integration_system_id", "provider_name"}
+	applicationColumns = []string{"id", "tenant_id", "name", "description", "status_condition", "status_timestamp", "healthcheck_url", "provider_name"}
 	tenantColumn       = "tenant_id"
 )
 
@@ -45,7 +55,7 @@ func NewRepository(conv EntityConverter) *pgRepository {
 		deleter:         repo.NewDeleter(resource.Application, applicationTable, tenantColumn),
 		pageableQuerier: repo.NewPageableQuerier(resource.Application, applicationTable, tenantColumn, applicationColumns),
 		creator:         repo.NewCreator(resource.Application, applicationTable, applicationColumns),
-		updater:         repo.NewUpdater(resource.Application, applicationTable, []string{"name", "description", "status_condition", "status_timestamp", "healthcheck_url", "integration_system_id", "provider_name"}, tenantColumn, []string{"id"}),
+		updater:         repo.NewUpdater(resource.Application, applicationTable, []string{"name", "description", "status_condition", "status_timestamp", "healthcheck_url", "provider_name"}, tenantColumn, []string{"id"}),
 		conv:            conv,
 	}
 }
@@ -183,4 +193,143 @@ func (r *pgRepository) Update(ctx context.Context, model *model.Application) err
 	}
 
 	return r.updater.UpdateSingle(ctx, appEnt)
+}
+
+func (r *pgRepository) ExistsApplicationByIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1
+FROM %s AS a 
+JOIN %s AS s on s.%s=a.id 
+WHERE a.tenant_id=$1 AND a.id=$2 AND s.%s=$3`,
+		applicationTable,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) ExistsApplicationByPackageIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1
+FROM %s AS a 
+JOIN %s AS p on a.id=p.%s 
+JOIN %s AS s on s.%s=a.id 
+WHERE a.tenant_id=$1 AND p.id=$2 AND s.%s=$3`,
+		applicationTable,
+		packageTable,
+		applicationRefField,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) ExistsApplicationByWebhookIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1 
+FROM %s AS a 
+JOIN %s AS w on a.id=w.%s 
+JOIN %s AS s on s.%s=a.id 
+WHERE a.tenant_id=$1 AND w.id=$2 AND s.%s=$3`,
+		applicationTable,
+		webhookTable,
+		applicationRefField,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) ExistsApplicationByPackageInstanceAuthIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1 
+FROM %s AS a 
+JOIN %s AS p on a.id=p.%s 
+JOIN %s as pia on p.id= pia.%s
+JOIN %s AS s on s.%s=a.id 
+WHERE p.tenant_id=$1 AND pia.id=$2 AND s.%s=$3`,
+		applicationTable,
+		packageTable,
+		applicationRefField,
+		packgeInstanceauthTable,
+		packageRefField,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) ExistsApplicationByDocumentIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1 
+FROM %s AS a 
+JOIN %s AS p on a.id=p.%s 
+JOIN %s AS d on p.id=d.%s
+JOIN %s AS s on s.%s=a.id
+WHERE a.tenant_id=$1 AND d.id=$2 AND s.%s=$3`,
+		applicationTable,
+		packageTable,
+		applicationRefField,
+		documentsTable,
+		packageRefField,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) ExistsApplicationByEventDefinitionIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1 
+FROM %s AS a 
+JOIN %s AS p on a.id=p.%s 
+JOIN %s AS d on p.id=d.%s
+JOIN %s AS s on s.%s=a.id
+WHERE a.tenant_id=$1 AND d.id=$2 AND s.%s=$3`,
+		applicationTable,
+		packageTable,
+		applicationRefField,
+		eventDefinitionsTable,
+		packageRefField,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) ExistsApplicationByAPIDefinitionIDAndAuthID(ctx context.Context, tenantID, id, authID string) (bool, error) {
+	stmt := fmt.Sprintf(`SELECT 1 
+FROM %s AS a 
+JOIN %s AS p on a.id=p.%s 
+JOIN %s AS d on p.id=d.%s
+JOIN %s AS s on s.%s=a.id
+WHERE a.tenant_id=$1 AND d.id=$2 AND s.%s=$3`,
+		applicationTable,
+		packageTable,
+		applicationRefField,
+		apiDefinitionsTable,
+		packageRefField,
+		systemAuthRestrictionsTable,
+		applicationRefField,
+		systemAuthRefField)
+
+	return r.exists(ctx, stmt, tenantID, id, authID)
+}
+
+func (r *pgRepository) exists(ctx context.Context, stmt, tenantID, id, authID string) (bool, error) {
+	persist, err := persistence.FromCtx(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	var count int
+	if err := persist.Get(&count, stmt, tenantID, id, authID); err != nil {
+		err = persistence.MapSQLError(err, resource.Application, "while getting object from DB")
+		if apperrors.IsNotFoundError(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }

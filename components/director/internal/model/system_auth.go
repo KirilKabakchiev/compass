@@ -11,6 +11,7 @@ type SystemAuth struct {
 	RuntimeID           *string
 	IntegrationSystemID *string
 	Value               *Auth
+	AccessLevel         string
 }
 
 func (sa SystemAuth) GetReferenceObjectType() (SystemAuthReferenceObjectType, error) {

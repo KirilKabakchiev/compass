@@ -43,13 +43,13 @@ func (m *mapperForUser) GetObjectContext(ctx context.Context, reqData oathkeeper
 		if !apperrors.IsKeyDoesNotExist(err) {
 			return ObjectContext{}, errors.Wrap(err, "while fetching external tenant")
 		}
-		return NewObjectContext(TenantContext{}, scopes, username, consumer.User), nil
+		return NewObjectContext(TenantContext{}, scopes, username, "", consumer.User, consumer.Unrestricted), nil
 	}
 
 	tenantMapping, err := m.tenantRepo.GetByExternalTenant(ctx, externalTenantID)
 	if err != nil {
 		if apperrors.IsNotFoundError(err) {
-			return NewObjectContext(NewTenantContext(externalTenantID, ""), scopes, username, consumer.User), nil
+			return NewObjectContext(NewTenantContext(externalTenantID, ""), scopes, username, "", consumer.User, consumer.Unrestricted), nil
 		}
 		return ObjectContext{}, errors.Wrapf(err, "while getting external tenant mapping [ExternalTenantId=%s]", externalTenantID)
 	}
@@ -58,7 +58,7 @@ func (m *mapperForUser) GetObjectContext(ctx context.Context, reqData oathkeeper
 		return ObjectContext{}, apperrors.NewInternalError("tenant mismatch")
 	}
 
-	return NewObjectContext(NewTenantContext(externalTenantID, tenantMapping.ID), scopes, username, consumer.User), nil
+	return NewObjectContext(NewTenantContext(externalTenantID, tenantMapping.ID), scopes, username, "", consumer.User, consumer.Unrestricted), nil
 }
 
 func (m *mapperForUser) getScopesForUserGroups(reqData oathkeeper.ReqData) string {
