@@ -3493,16 +3493,16 @@ input RuntimeInput {
 	statusCondition: RuntimeStatusCondition
 }
 
+input SystemAuthAccessInput {
+	to: SystemAuthAccessToInput!
+	for: SystemAuthAccessForInput!
+}
+
 input SystemAuthAccessForInput {
 	applicationID: String
 	applicationTemplateID: String
 	runtimeID: String
 	integrationSystemID: String
-}
-
-input SystemAuthAccessInput {
-	to: SystemAuthAccessToInput!
-	for: SystemAuthAccessForInput!
 }
 
 input SystemAuthAccessToInput {
@@ -3883,11 +3883,6 @@ type SystemAuth {
 	auth: Auth
 }
 
-type SystemAuthAccess {
-	to: SystemAuthAccessTo!
-	for: SystemAuthAccessFor!
-}
-
 type SystemAuthAccessFor {
 	applicationID: String
 	applicationTemplateID: String
@@ -3899,6 +3894,11 @@ type SystemAuthAccessTo {
 	applicationID: String
 	runtimeID: String
 	integrationSystemID: String
+}
+
+type SystemAuthAccess {
+	to: SystemAuthAccessTo!
+	for: SystemAuthAccessFor!
 }
 
 type Tenant {

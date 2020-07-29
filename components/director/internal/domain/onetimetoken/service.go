@@ -85,7 +85,10 @@ func (s service) GenerateOneTimeToken(ctx context.Context, id string, tokenType 
 	}
 
 	if tokenType == model.ApplicationReference {
-		//TODO prolly add mapping to templates instead
+		//TODO prolly add json mapping and ott issuer url to templates instead
+		//TODO when creating app from template and the template has a ott issuer url, use it instead
+		//TODO when app from template is created it gets labelled with the adapter url
+		//TODO registering apps with no template uses the default connector ott
 		//app, err := s.appSvc.Get(ctx, id)
 
 		//if err != nil {

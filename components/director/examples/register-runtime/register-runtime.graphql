@@ -9,7 +9,7 @@ mutation {
     labels
     status {
       condition
-      timestampç
+      timestamp
     }
     metadata {
       creationTimestamp
